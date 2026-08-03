@@ -2,7 +2,7 @@ import './globals.css';
 
 export const metadata = {
   title: 'GameVault Pro',
-  description: 'A modern game account marketplace with reviews and secure orders.',
+  description: 'Buy GTA 5 money, level boosts, and upgrades with secure checkout.',
 };
 
 export default function RootLayout({ children }) {

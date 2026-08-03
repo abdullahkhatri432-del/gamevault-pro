@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { isAdminRequest } from '../../../../../lib/admin';
-import { deleteProduct, updateProduct } from '../../../../../lib/store';
+import { deleteCoupon, updateCoupon } from '../../../../../lib/store';
 
 export async function PATCH(request, { params }) {
   if (!(await isAdminRequest())) {
@@ -8,18 +8,18 @@ export async function PATCH(request, { params }) {
   }
 
   const { id } = await params;
-  const productId = Number(id);
-  if (!productId) {
-    return NextResponse.json({ message: 'A valid product ID is required.' }, { status: 400 });
+  const couponId = Number(id);
+  if (!couponId) {
+    return NextResponse.json({ message: 'A valid promo code ID is required.' }, { status: 400 });
   }
 
   const payload = await request.json();
 
   try {
-    const updatedProduct = await updateProduct(productId, payload);
-    return NextResponse.json(updatedProduct);
+    const updated = await updateCoupon(couponId, payload);
+    return NextResponse.json(updated);
   } catch (error) {
-    return NextResponse.json({ message: error.message || 'Unable to update the product.' }, { status: 400 });
+    return NextResponse.json({ message: error.message || 'Unable to update the promo code.' }, { status: 400 });
   }
 }
 
@@ -29,11 +29,11 @@ export async function DELETE(_request, { params }) {
   }
 
   const { id } = await params;
-  const productId = Number(id);
-  if (!productId) {
-    return NextResponse.json({ message: 'A valid product ID is required.' }, { status: 400 });
+  const couponId = Number(id);
+  if (!couponId) {
+    return NextResponse.json({ message: 'A valid promo code ID is required.' }, { status: 400 });
   }
 
-  await deleteProduct(productId);
+  await deleteCoupon(couponId);
   return NextResponse.json({ ok: true });
 }

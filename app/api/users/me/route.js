@@ -1,14 +1,8 @@
-import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { getUserById } from '../../../../lib/store';
+import { getCurrentUser } from '../../../../lib/auth';
 
 export async function GET() {
-  const userCookie = cookies().get('gamevault_user');
-  if (!userCookie?.value) {
-    return NextResponse.json({ authenticated: false }, { status: 401 });
-  }
-
-  const user = await getUserById(userCookie.value);
+  const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ authenticated: false }, { status: 401 });
   }

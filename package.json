@@ -8,10 +8,13 @@
     "start": "next start"
   },
   "dependencies": {
-    "better-sqlite3": "^13.0.2",
-    "next": "14.2.15",
+    "next": "16.2.12",
     "razorpay": "^2.9.8",
-    "react": "18.3.1",
-    "react-dom": "18.3.1"
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  },
+  "overrides": {
+    "postcss": "^8.5.18",
+    "sharp": "^0.35.0"
   }
 }

@@ -1,14 +1,13 @@
 import { NextResponse } from 'next/server';
 import { isAdminRequest } from '../../../../lib/admin';
-import { createProduct, listProducts } from '../../../../lib/store';
+import { createCoupon, listCoupons } from '../../../../lib/store';
 
 export async function GET() {
   if (!(await isAdminRequest())) {
     return NextResponse.json({ authenticated: false }, { status: 401 });
   }
 
-  const products = await listProducts();
-  return NextResponse.json({ products });
+  return NextResponse.json({ coupons: await listCoupons() });
 }
 
 export async function POST(request) {
@@ -19,9 +18,9 @@ export async function POST(request) {
   const payload = await request.json();
 
   try {
-    const createdProduct = await createProduct(payload);
-    return NextResponse.json(createdProduct, { status: 201 });
+    const coupon = await createCoupon(payload);
+    return NextResponse.json(coupon, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ message: error.message || 'Unable to create the product.' }, { status: 400 });
+    return NextResponse.json({ message: error.message || 'Unable to create the promo code.' }, { status: 400 });
   }
 }

@@ -1,6 +1,22 @@
+# Dependencies
 node_modules/
-next/
-.envnext/
-.env.local
-node_modules/
+
+# Next.js build output
 .next/
+next-env.d.ts
+
+# Environment (contains secrets — never commit)
+.env
+.env.local
+.env*.local
+
+# Local runtime data (customer + order DB, cookie jars)
+data/*.db
+data/*.db-shm
+data/*.db-wal
+cookie.txt
+cookies.txt
+
+# Logs / misc
+*.log
+.DS_Store

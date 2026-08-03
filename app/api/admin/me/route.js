@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import { isAdminRequest } from '../../../../lib/admin';
 
 export async function GET() {
-  const adminCookie = cookies().get('gamevault_admin');
-
-  if (adminCookie?.value !== 'true') {
+  if (!(await isAdminRequest())) {
     return NextResponse.json({ authenticated: false }, { status: 401 });
   }
 

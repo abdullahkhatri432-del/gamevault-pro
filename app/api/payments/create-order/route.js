@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import Razorpay from 'razorpay';
+import { getOrderById, attachRazorpayOrder } from '../../../../lib/store';
 
 export async function POST(request) {
   const payload = await request.json();
+  const orderId = String(payload.orderId || '').trim();
 
   if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
     return NextResponse.json({
@@ -10,12 +12,22 @@ export async function POST(request) {
     }, { status: 400 });
   }
 
-  const amount = Number(payload.amount || 0);
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return NextResponse.json({ message: 'A valid amount is required for Razorpay checkout.' }, { status: 400 });
+  if (!orderId) {
+    return NextResponse.json({ message: 'A valid order ID is required.' }, { status: 400 });
   }
 
-  const normalizedAmount = amount > 1000 ? Math.round(amount) : Math.round(amount * 100);
+  const order = await getOrderById(orderId);
+  if (!order) {
+    return NextResponse.json({ message: 'Order not found.' }, { status: 404 });
+  }
+
+  if (order.status === 'paid' || order.status === 'delivered') {
+    return NextResponse.json({ message: 'This order has already been paid.' }, { status: 400 });
+  }
+
+  if (order.amountPaise <= 0) {
+    return NextResponse.json({ message: 'This order has an invalid amount. Contact support.' }, { status: 400 });
+  }
 
   try {
     const razorpay = new Razorpay({
@@ -23,14 +35,26 @@ export async function POST(request) {
       key_secret: process.env.RAZORPAY_KEY_SECRET,
     });
 
-    const order = await razorpay.orders.create({
-      amount: normalizedAmount,
-      currency: payload.currency || 'INR',
-      receipt: payload.receipt || `receipt_${Date.now()}`,
-      notes: payload.notes || {},
+    const createdOrder = await razorpay.orders.create({
+      amount: order.amountPaise,
+      currency: 'INR',
+      receipt: `order_${orderId}`,
+      notes: {
+        customerName: order.name,
+        customerEmail: order.email,
+        account: order.game,
+        launcher: order.launcher,
+      },
     });
 
-    return NextResponse.json(order);
+    await attachRazorpayOrder(orderId, createdOrder.id);
+
+    return NextResponse.json({
+      id: createdOrder.id,
+      amount: createdOrder.amount,
+      currency: createdOrder.currency,
+      orderId,
+    });
   } catch (error) {
     return NextResponse.json({ message: error.message || 'Unable to create a Razorpay order.' }, { status: 500 });
   }
