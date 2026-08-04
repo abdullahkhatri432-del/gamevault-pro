@@ -1,14 +1,29 @@
 import { NextResponse } from 'next/server';
 import Razorpay from 'razorpay';
 import { getOrderById, attachRazorpayOrder } from '../../../../lib/store';
+import { sanitizeString, validateOrderId } from '../../../../lib/validate';
+
+const MAX_JSON_SIZE = 1024 * 1024;
+
+function checkRequestSize(request) {
+  const contentLength = request.headers.get('content-length');
+  if (contentLength && Number(contentLength) > MAX_JSON_SIZE) {
+    return true;
+  }
+  return false;
+}
 
 export async function POST(request) {
+  if (checkRequestSize(request)) {
+    return NextResponse.json({ message: 'Request too large.' }, { status: 413 });
+  }
+
   const payload = await request.json();
-  const orderId = String(payload.orderId || '').trim();
+  const orderId = validateOrderId(payload.orderId);
 
   if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
     return NextResponse.json({
-      message: 'Razorpay credentials are not configured yet. Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to your environment.',
+      message: 'Payment processing is not configured.',
     }, { status: 400 });
   }
 
@@ -26,7 +41,7 @@ export async function POST(request) {
   }
 
   if (order.amountPaise <= 0) {
-    return NextResponse.json({ message: 'This order has an invalid amount. Contact support.' }, { status: 400 });
+    return NextResponse.json({ message: 'This order has an invalid amount.' }, { status: 400 });
   }
 
   try {
@@ -56,6 +71,6 @@ export async function POST(request) {
       orderId,
     });
   } catch (error) {
-    return NextResponse.json({ message: error.message || 'Unable to create a Razorpay order.' }, { status: 500 });
+    return NextResponse.json({ message: 'Unable to create a Razorpay order.' }, { status: 500 });
   }
 }

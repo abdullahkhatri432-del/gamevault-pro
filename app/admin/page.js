@@ -3,6 +3,15 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
+const GAMES_CONFIG = [
+  { id: 'all', name: 'All Games', icon: '🎮', color: '#8B5CF6' },
+  { id: 'gta5', name: 'GTA V', icon: '🚗', color: '#F59E0B' },
+  { id: 'valorant', name: 'Valorant', icon: '🔫', color: '#EF4444' },
+  { id: 'fortnite', name: 'Fortnite', icon: '🏗️', color: '#8B5CF6' },
+  { id: 'forza', name: 'Forza Horizon', icon: '🏎️', color: '#06B6D4' },
+  { id: 'other', name: 'Other Games', icon: '🎮', color: '#6B7280' },
+];
+
 const createEmptyProduct = () => ({
   title: '',
   price: '',
@@ -10,6 +19,7 @@ const createEmptyProduct = () => ({
   rating: '4.8',
   stock: 'In stock',
   category: 'Game',
+  gameId: 'gta5',
   imageUrl: '',
   description: '',
 });
@@ -29,6 +39,8 @@ export default function AdminPage() {
   const [coupons, setCoupons] = useState([]);
   const [couponForm, setCouponForm] = useState({ code: '', discountType: 'percent', discountValue: '', maxUses: 0, expiresAt: '' });
   const [couponStatus, setCouponStatus] = useState('');
+  const [activeGameFilter, setActiveGameFilter] = useState('all');
+  const [agentId, setAgentId] = useState('');
 
   const hydrateStore = async () => {
     const storeResponse = await fetch('/api/store');
@@ -124,7 +136,7 @@ export default function AdminPage() {
     const response = await fetch(`/api/admin/orders/${orderId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, agentId: agentId || undefined }),
     });
 
     if (!response.ok) {
@@ -136,6 +148,52 @@ export default function AdminPage() {
     setOrders((current) =>
       current.map((order) => (order.id === orderId ? { ...order, status } : order))
     );
+  };
+
+  const handleAssignAgent = async (orderId) => {
+    if (!agentId) {
+      setProductStatus('Please enter an agent ID first.');
+      return;
+    }
+
+    const response = await fetch(`/api/orders?action=update-status&orderId=${orderId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'in_progress', agentId }),
+    });
+
+    if (!response.ok) {
+      const result = await response.json();
+      setProductStatus(result.message || 'Unable to assign agent.');
+      return;
+    }
+
+    setOrders((current) =>
+      current.map((order) => (order.id === orderId ? { ...order, status: 'in_progress', fulfillmentAgentId: agentId } : order))
+    );
+    setProductStatus(`Agent ${agentId} assigned to order ${orderId}.`);
+  };
+
+  const handleUpdateDeliveryProof = async (orderId) => {
+    const proof = prompt('Enter delivery proof (screenshot URL or description):');
+    if (!proof) return;
+
+    const response = await fetch(`/api/orders?action=update-delivery-proof&orderId=${orderId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deliveryProof: proof }),
+    });
+
+    if (!response.ok) {
+      const result = await response.json();
+      setProductStatus(result.message || 'Unable to update delivery proof.');
+      return;
+    }
+
+    setOrders((current) =>
+      current.map((order) => (order.id === orderId ? { ...order, deliveryProof: proof } : order))
+    );
+    setProductStatus('Delivery proof updated.');
   };
 
   const handleRevealCredentials = async (orderId) => {
@@ -206,6 +264,15 @@ export default function AdminPage() {
     setCoupons((current) => current.filter((item) => item.id !== coupon.id));
   };
 
+  const filteredOrders = activeGameFilter === 'all'
+    ? orders
+    : orders.filter((order) => order.gameId === activeGameFilter);
+
+  const ordersByGame = GAMES_CONFIG.filter((g) => g.id !== 'all').map((game) => ({
+    ...game,
+    count: orders.filter((o) => o.gameId === game.id).length,
+  }));
+
   if (checkingAuth) {
     return <main className="admin-shell"><p>Checking admin access…</p></main>;
   }
@@ -222,7 +289,10 @@ export default function AdminPage() {
           <h1>Marketplace control center</h1>
         </div>
         <div className="admin-hero-actions">
+          <a className="secondary-btn" href="/admin/settings/launchers">⚙️ Launcher Settings</a>
+          <a className="secondary-btn" href="/admin/chats">💬 Chat Monitor</a>
           <a className="secondary-btn" href="/">Back to storefront</a>
+          <a className="secondary-btn" href="/dashboard">User Dashboard</a>
           <button className="ghost-btn" onClick={handleLogout}>Sign out</button>
         </div>
       </section>
@@ -246,10 +316,27 @@ export default function AdminPage() {
         </article>
       </section>
 
+      <section className="admin-stats">
+        {ordersByGame.map((game) => (
+          <article key={game.id} className="admin-stat" style={{ borderLeft: `3px solid ${game.color}` }}>
+            <span>{game.icon} {game.name}</span>
+            <strong>{game.count} orders</strong>
+          </article>
+        ))}
+      </section>
+
       <section className="admin-grid admin-wide-grid">
         <article className="admin-card">
           <h2>Catalog manager</h2>
           <form className="product-admin-form" onSubmit={handleCreateProduct}>
+            <label>
+              Game
+              <select value={productForm.gameId} onChange={(event) => setProductForm({ ...productForm, gameId: event.target.value })}>
+                {GAMES_CONFIG.filter((g) => g.id !== 'all').map((game) => (
+                  <option key={game.id} value={game.id}>{game.icon} {game.name}</option>
+                ))}
+              </select>
+            </label>
             <label>
               Game title
               <input value={productForm.title} onChange={(event) => setProductForm({ ...productForm, title: event.target.value })} placeholder="GTA 5 Money 30M" />
@@ -288,18 +375,43 @@ export default function AdminPage() {
         </article>
 
         <article className="admin-card">
-          <h2>Orders ({orders.length})</h2>
-          {orders.length === 0 ? (
-            <p>No orders yet.</p>
+          <h2>Orders ({filteredOrders.length})</h2>
+          <div className="game-filter" role="tablist" aria-label="Filter orders by game">
+            {GAMES_CONFIG.map((game) => (
+              <button
+                key={game.id}
+                type="button"
+                className={`filter-chip${activeGameFilter === game.id ? ' active' : ''}`}
+                onClick={() => setActiveGameFilter(game.id)}
+              >
+                {game.icon} {game.name}
+              </button>
+            ))}
+          </div>
+          <div className="agent-input">
+            <label>
+              Agent ID
+              <input value={agentId} onChange={(e) => setAgentId(e.target.value)} placeholder="Enter agent ID for assignment" />
+            </label>
+          </div>
+          {filteredOrders.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-state-icon">📦</div>
+              <h3>No orders found</h3>
+              <p>No orders match the current filter.</p>
+            </div>
           ) : (
             <div className="order-admin-list">
-              {orders.map((order) => (
+              {filteredOrders.map((order) => (
                 <div className="order-admin-item" key={order.id}>
                   <div className="order-admin-head">
                     <strong>{order.name}</strong>
                     <span className={`status-badge status-${order.status}`}>{order.status}</span>
                     {order.serviceType && (
                       <span className="service-badge">{order.serviceType}</span>
+                    )}
+                    {order.gameId && (
+                      <span className="game-badge">{GAMES_CONFIG.find((g) => g.id === order.gameId)?.icon || '🎮'}</span>
                     )}
                   </div>
                   <p className="order-admin-meta">{order.game} · {order.launcher} · {formatPaise(order.amountPaise)}{order.discountPaise > 0 ? ` (was ${formatPaise(order.amountPaise + order.discountPaise)} · code ${order.couponCode})` : ''}</p>
@@ -310,6 +422,12 @@ export default function AdminPage() {
                   )}
                   {order.deliveryEta && (
                     <p className="order-admin-meta">ETA: {order.deliveryEta}</p>
+                  )}
+                  {order.fulfillmentAgentId && (
+                    <p className="order-admin-meta">Agent: {order.fulfillmentAgentId}</p>
+                  )}
+                  {order.deliveryProof && (
+                    <p className="order-admin-meta">Proof: {order.deliveryProof}</p>
                   )}
 
                   <div className="credentials-block">
@@ -327,21 +445,31 @@ export default function AdminPage() {
                         )}
                       </div>
                     ) : null}
-                    {order.status === 'in_progress' && (
-                      <button
-                        className="ghost-btn small"
-                        type="button"
-                        onClick={async () => {
-                          await fetch(`/api/orders?action=generate-otp`, {
-                            method: 'PATCH',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ orderId: order.id, agentId: 'admin' })
-                          });
-                          setProductStatus('OTP generated and notification sent to customer.');
-                        }}
-                      >
-                        Request 2FA OTP
+                    {order.status === 'paid' && (
+                      <button className="ghost-btn small" type="button" onClick={() => handleAssignAgent(order.id)}>
+                        Assign Agent
                       </button>
+                    )}
+                    {order.status === 'in_progress' && (
+                      <>
+                        <button
+                          className="ghost-btn small"
+                          type="button"
+                          onClick={async () => {
+                            await fetch(`/api/orders?action=generate-otp`, {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ orderId: order.id, agentId: agentId || 'admin' })
+                            });
+                            setProductStatus('OTP generated and notification sent to customer.');
+                          }}
+                        >
+                          Request 2FA OTP
+                        </button>
+                        <button className="ghost-btn small" type="button" onClick={() => handleUpdateDeliveryProof(order.id)}>
+                          Add Delivery Proof
+                        </button>
+                      </>
                     )}
                     {order.status === 'delivered' && (
                       <button
@@ -393,6 +521,14 @@ export default function AdminPage() {
                   {product.imageUrl ? <img src={product.imageUrl} alt={product.title} /> : <span>No image</span>}
                 </div>
                 <div className="inventory-fields">
+                  <label>
+                    Game
+                    <select value={product.gameId || 'gta5'} onChange={(event) => setProductDrafts(productDrafts.map((entry) => entry.id === product.id ? { ...entry, gameId: event.target.value } : entry))}>
+                      {GAMES_CONFIG.filter((g) => g.id !== 'all').map((game) => (
+                        <option key={game.id} value={game.id}>{game.icon} {game.name}</option>
+                      ))}
+                    </select>
+                  </label>
                   <label>
                     Title
                     <input value={product.title} onChange={(event) => setProductDrafts(productDrafts.map((entry) => entry.id === product.id ? { ...entry, title: event.target.value } : entry))} />

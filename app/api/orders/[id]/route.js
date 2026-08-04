@@ -1,144 +1,41 @@
-"""
-GTA V Paid Services Platform - Integrated System Specification
-
-This document outlines the complete system architecture and implementation plan
-for building a high-converting GTA V Paid Services platform with:
-- Automated 2FA/OTP fulfillment
-- Admin fulfillment pipeline
-- Gaming UI with Discord integration
-- Multiple service types (Account Recovery, Modded Accounts, Lobby/Heist Services)
-
-DEVELOPMENT STATUS: ARCHITECTURE AND CORE IMPLEMENTATION COMPLETE
-IMPLEMENTATION PROGRESS: 85%
-"""
-
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '../../../lib/auth';
 import { isAdminRequest } from '../../../lib/admin';
 import { clientIp, rateLimit } from '../../../lib/ratelimit';
-import { 
-  createOrderWith2FA, 
-  getOrdersForFulfillment, 
-  updateOrderFulfillmentStatus, 
-  generateAndStoreOTP, 
-  verifyOTP, 
-  purgeSensitiveData, 
-  decryptCredentials, 
-  sendDiscordWebhook,
-  applyCoupon,
-  priceToPaise
-} from '../../../lib/store';
+import { createOrderWith2FA, getOrdersForFulfillment, updateOrderFulfillmentStatus, generateAndStoreOTP, verifyOTP, purgeSensitiveData, decryptCredentials, sendDiscordWebhook } from '../../../lib/store';
+import { validateOrderId, sanitizeString } from '../../../lib/validate';
 
-const GTA_V_SERVICE_SPEC = {
-  // Visual Theme
-  theme: {
-    colors: {
-      dark: '#09090B',
-      surface: '#18181B',
-      primary: '#8B5CF6', // Electric Violet
-      secondary: '#06B6D4', // Neon Cyan
-      success: '#10B981',
-      warning: '#F59E0B',
-      danger: '#EF4444',
-    },
-    branding: {
-      name: 'BOOSTVERSE',
-      tagline: 'Instant GTA V Cash, Rank & Account Services',
-    }
-  },
+const MAX_JSON_SIZE = 1024 * 1024;
 
-  // Platform Selection
-  platforms: {
-    pc: ['Steam', 'Epic Games', 'Rockstar Launcher', 'Social Club'],
-    playstation: ['PS4', 'PS5'],
-    xbox: ['Xbox One', 'Xbox Series X|S', 'Xbox Live'],
-  },
+function checkRequestSize(request) {
+  const contentLength = request.headers.get('content-length');
+  if (contentLength && Number(contentLength) > MAX_JSON_SIZE) {
+    return true;
+  }
+  return false;
+}
 
-  // Service Types
-  serviceTypes: {
-    account_recovery: {
-      name: 'Account Recovery (Cash/RP Boost)',
-      description: 'Options: Cash Packages ($50M - $1B), Target Rank (120 - 500), Unlocks (Max Stats, LSC, Clothing)',
-      requiresCredentials: true,
-      credentialFields: ['platform', 'accountId', 'accountPassword', 'twofaBackupCode'],
-    },
-    modded_accounts: {
-      name: 'Premade Modded Accounts (Instant Handover)',
-      description: 'Delivers pre-boosted credentials immediately upon payment completion',
-      requiresCredentials: true,
-      credentialFields: ['platform', 'accountId', 'accountPassword'],
-      instantDelivery: true,
-    },
-    lobby_heist: {
-      name: 'In-Game Lobby / Heist Drops',
-      description: 'Requires Gamertag / Social Club ID only (No credentials needed)',
-      requiresCredentials: false,
-      credentialFields: ['platform', 'socialId'],
-      instantDelivery: true,
-    },
-  },
+export async function GET(request, { params }) {
+  const { id } = await params;
+  const orderId = validateOrderId(id);
 
-  // Status Pipeline
-  orderStatuses: {
-    pending: { label: 'Pending Payment', color: 'yellow', order: 1 },
-    paid: { label: 'Payment Received', color: 'blue', order: 2 },
-    in_progress: { label: 'Agent Logging In', color: 'purple', order: 3 },
-    delivered: { label: 'Order Completed', color: 'green', order: 4 },
-    cancelled: { label: 'Cancelled/Refunded', color: 'red', order: 5 },
-  },
-
-  // Payment Gateways
-  paymentGateways: {
-    razorpay: {
-      name: 'Razorpay',
-      itemPrefix: 'Digital Gaming Coaching & Virtual Assets',
-    },
-    stripe: {
-      name: 'Stripe',
-      itemPrefix: 'Digital Gaming Coaching & Virtual Assets',
-    },
-    upi: {
-      name: 'UPI',
-      itemPrefix: 'Digital Gaming Coaching & Virtual Assets',
-    },
-    crypto: {
-      name: 'Cryptocurrency',
-      itemPrefix: 'Digital Gaming Coaching & Virtual Assets',
-    },
-  },
-};
-
-export async function GET(request) {
-  const url = new URL(request.url);
-  const action = url.searchParams.get('action');
-  const fulfillmentAction = url.searchParams.get('fulfillment');
-
-  if (action === 'spec') {
-    return NextResponse.json(GTA_V_SERVICE_SPEC);
+  if (!(await isAdminRequest())) {
+    return NextResponse.json({ authenticated: false }, { status: 401 });
   }
 
-  if (fulfillmentAction === 'active') {
-    if (!(await isAdminRequest())) {
-      return NextResponse.json({ authenticated: false }, { status: 401 });
-    }
-
-    const orders = await getOrdersForFulfillment();
-    return NextResponse.json(orders);
+  const order = await decryptCredentials(orderId);
+  if (!order) {
+    return NextResponse.json({ message: 'Order not found.' }, { status: 404 });
   }
 
-  if (action === 'fulfillment') {
-    if (!(await isAdminRequest())) {
-      return NextResponse.json({ authenticated: false }, { status: 401 });
-    }
-
-    const orders = await getOrdersForFulfillment();
-    return NextResponse.json(orders);
-  }
-
-  return NextResponse.json({ message: 'Use ?action=spec for system specification or ?fulfillment=active for fulfillment orders.' });
+  return NextResponse.json(order);
 }
 
 export async function POST(request) {
+  if (checkRequestSize(request)) {
+    return NextResponse.json({ message: 'Request too large.' }, { status: 413 });
+  }
+
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ message: 'Please sign in with Google to place an order.' }, { status: 401 });
@@ -150,11 +47,12 @@ export async function POST(request) {
 
   const payload = await request.json();
 
-  if (!payload.serviceType) {
+  const serviceType = sanitizeString(payload.serviceType, 64);
+  if (!serviceType) {
     return NextResponse.json({ message: 'Service type is required to place an order.' }, { status: 400 });
   }
 
-  const discordWebhookId = payload.discordWebhookId || null;
+  const discordWebhookId = payload.discordWebhookId ? sanitizeString(payload.discordWebhookId, 256) : null;
 
   try {
     const order = await createOrderWith2FA({
@@ -169,40 +67,50 @@ export async function POST(request) {
 
     return NextResponse.json(order, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ message: error.message || 'Unable to place the order.' }, { status: 400 });
+    return NextResponse.json({ message: 'Unable to place the order.' }, { status: 400 });
   }
 }
 
-export async function PATCH(request) {
+export async function PATCH(request, { params }) {
   if (!(await isAdminRequest())) {
     return NextResponse.json({ authenticated: false }, { status: 401 });
   }
 
+  const { id } = await params;
+  const orderId = validateOrderId(id);
   const url = new URL(request.url);
-  const orderId = url.searchParams.get('orderId');
   const action = url.searchParams.get('action');
 
-  if (!orderId) {
-    return NextResponse.json({ message: 'Order ID is required.' }, { status: 400 });
+  if (!action) {
+    return NextResponse.json({ message: 'Action is required.' }, { status: 400 });
+  }
+
+  if (checkRequestSize(request)) {
+    return NextResponse.json({ message: 'Request too large.' }, { status: 413 });
   }
 
   const payload = await request.json();
 
   try {
     if (action === 'update-status') {
-      const { status, agentId } = payload;
+      const status = sanitizeString(payload.status, 32);
+      const allowedStatuses = ['pending', 'paid', 'in_progress', 'delivered', 'cancelled'];
+      if (!allowedStatuses.includes(status)) {
+        return NextResponse.json({ message: 'Invalid status.' }, { status: 400 });
+      }
+      const agentId = payload.agentId ? sanitizeString(payload.agentId, 64) : null;
       await updateOrderFulfillmentStatus(orderId, status, agentId);
       return NextResponse.json({ message: 'Order status updated.', orderId });
     }
 
     if (action === 'generate-otp') {
-      const { expiryMinutes } = payload;
+      const expiryMinutes = Math.min(Math.max(Number(payload.expiryMinutes) || 15, 1), 60);
       const otpData = await generateAndStoreOTP(orderId, expiryMinutes);
       return NextResponse.json(otpData);
     }
 
     if (action === 'verify-otp') {
-      const { otp } = payload;
+      const otp = sanitizeString(payload.otp, 10);
       await verifyOTP(orderId, otp);
       return NextResponse.json({ message: 'OTP verified successfully.' });
     }
@@ -214,26 +122,6 @@ export async function PATCH(request) {
 
     return NextResponse.json({ message: 'Invalid action.' }, { status: 400 });
   } catch (error) {
-    return NextResponse.json({ message: error.message || 'Operation failed.' }, { status: 400 });
-  }
-}
-
-export async function GET_CREDENTIALS(request) {
-  if (!(await isAdminRequest())) {
-    return NextResponse.json({ authenticated: false }, { status: 401 });
-  }
-
-  const url = new URL(request.url);
-  const orderId = url.searchParams.get('orderId');
-
-  if (!orderId) {
-    return NextResponse.json({ message: 'Order ID is required.' }, { status: 400 });
-  }
-
-  try {
-    const credentials = await decryptCredentials(orderId);
-    return NextResponse.json(credentials);
-  } catch (error) {
-    return NextResponse.json({ message: error.message || 'Unable to decrypt credentials.' }, { status: 400 });
+    return NextResponse.json({ message: 'Operation failed.' }, { status: 400 });
   }
 }

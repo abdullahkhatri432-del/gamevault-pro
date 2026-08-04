@@ -6,7 +6,7 @@ export async function POST() {
     name: 'gamevault_user',
     value: '',
     httpOnly: true,
-    sameSite: 'lax',
+    sameSite: 'strict',
     secure: process.env.NODE_ENV === 'production',
     path: '/',
     maxAge: 0,

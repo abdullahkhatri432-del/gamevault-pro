@@ -1,8 +1,18 @@
-"""User Profile Page - GameVault Pro Gaming Platform"""
-
 import { useEffect, useState } from 'react';
 
 const formatPaise = (paise) => `₹${(Number(paise || 0) / 100).toLocaleString('en-IN')}`;
+
+function escapeHTML(str) {
+  if (typeof str !== 'string') {
+    return '';
+  }
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
 
 export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState('orders');
@@ -98,33 +108,39 @@ export default function ProfilePage() {
   };
 
   const generateInvoice = (order) => {
-    const invoiceWindow = window.open('', '_blank');
-    invoiceWindow.document.write(`
+    const invoiceWindow = window.open('', '_blank', 'noopener,noreferrer');
+    if (!invoiceWindow) {
+      alert('Please allow popups to download the invoice.');
+      return;
+    }
+
+    const html = `
+      <!DOCTYPE html>
       <html>
         <head>
-          <title>Invoice - ${order.id}</title>
+          <title>Invoice - ${escapeHTML(order.id)}</title>
           <style>
-            body { fontFamily: 'monospace', backgroundColor: '#09090B', color: '#ffffff', padding: '40px', fontSize: '14px' }
-            .invoice-container { maxWidth: '600px', margin: '0 auto', backgroundColor: '#18181B', padding: '30px', border: '2px solid #8B5CF6' }
-            .header { textAlign: 'center', borderBottom: '2px solid #8B5CF6', paddingBottom: '20px', marginBottom: '30px' }
-            .title { fontSize: '28px', color: '#8B5CF6', marginBottom: '10px' }
-            .subtitle { fontSize: '16px', color: '#06B6D4' }
-            .section { marginBottom: '25px' }
-            .section-title { fontSize: '18px', color: '#10B981', borderBottom: '1px solid #374151', paddingBottom: '5px', marginBottom: '15px' }
-            .info-grid { display: grid; gridTemplateColumns: '1fr 1fr'; gap: '20px' }
-            .info-item { marginBottom: '10px' }
-            .label { color: '#9CA3AF', fontSize: '12px' }
-            .value { color: '#ffffff', fontSize: '14px', fontWeight: 'bold' }
-            .total { fontSize: '20px', color: '#8B5CF6', borderTop: '2px solid #8B5CF6', paddingTop: '15px', marginTop: '20px' }
-            .status-badge { display: inline-block; padding: '5px 15px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', margin: '5px' }
-            .footer { textAlign: 'center', marginTop: '40px', paddingTop: '20px', borderTop: '1px solid #374151', color: '#6B7280' }
+            body { font-family: monospace; background-color: #09090B; color: #ffffff; padding: 40px; font-size: 14px; }
+            .invoice-container { max-width: 600px; margin: 0 auto; background-color: #18181B; padding: 30px; border: 2px solid #8B5CF6; }
+            .header { text-align: center; border-bottom: 2px solid #8B5CF6; padding-bottom: 20px; margin-bottom: 30px; }
+            .title { font-size: 28px; color: #8B5CF6; margin-bottom: 10px; }
+            .subtitle { font-size: 16px; color: #06B6D4; }
+            .section { margin-bottom: 25px; }
+            .section-title { font-size: 18px; color: #10B981; border-bottom: 1px solid #374151; padding-bottom: 5px; margin-bottom: 15px; }
+            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+            .info-item { margin-bottom: 10px; }
+            .label { color: #9CA3AF; font-size: 12px; }
+            .value { color: #ffffff; font-size: 14px; font-weight: bold; }
+            .total { font-size: 20px; color: #8B5CF6; border-top: 2px solid #8B5CF6; padding-top: 15px; margin-top: 20px; }
+            .status-badge { display: inline-block; padding: 5px 15px; border-radius: 20px; font-size: 12px; font-weight: bold; margin: 5px; }
+            .footer { text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #374151; color: #6B7280; }
           </style>
         </head>
         <body>
           <div class="invoice-container">
             <div class="header">
               <div class="title">GAMEVAULT PRO</div>
-              <div class="subtitle">Invoice #${order.id}</div>
+              <div class="subtitle">Invoice #${escapeHTML(order.id)}</div>
               <div>Date: ${new Date(order.createdAt).toLocaleDateString()}</div>
             </div>
 
@@ -133,11 +149,11 @@ export default function ProfilePage() {
               <div class="info-grid">
                 <div class="info-item">
                   <div class="label">Customer Name</div>
-                  <div class="value">${order.name}</div>
+                  <div class="value">${escapeHTML(order.name)}</div>
                 </div>
                 <div class="info-item">
                   <div class="label">Email</div>
-                  <div class="value">${order.email}</div>
+                  <div class="value">${escapeHTML(order.email)}</div>
                 </div>
               </div>
             </div>
@@ -147,21 +163,21 @@ export default function ProfilePage() {
               <div class="info-grid">
                 <div class="info-item">
                   <div class="label">Service</div>
-                  <div class="value">${order.game}</div>
+                  <div class="value">${escapeHTML(order.game)}</div>
                 </div>
                 <div class="info-item">
                   <div class="label">Launcher</div>
-                  <div class="value">${order.launcher}</div>
+                  <div class="value">${escapeHTML(order.launcher)}</div>
                 </div>
                 <div class="info-item">
                   <div class="label">Platform Type</div>
-                  <div class="value">${order.platformType || 'Not specified'}</div>
+                  <div class="value">${escapeHTML(order.platformType || 'Not specified')}</div>
                 </div>
                 <div class="info-item">
                   <div class="label">Order Status</div>
                   <div class="value">
                     <span class="status-badge ${getStatusColor(order.status)}">
-                      ${order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                      ${escapeHTML(order.status.charAt(0).toUpperCase() + order.status.slice(1))}
                     </span>
                   </div>
                 </div>
@@ -202,7 +218,11 @@ export default function ProfilePage() {
           </div>
         </body>
       </html>
-    `);
+    `;
+
+    invoiceWindow.document.write(html);
+    invoiceWindow.document.close();
+    invoiceWindow.print();
   };
 
   if (loading) {

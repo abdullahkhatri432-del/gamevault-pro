@@ -2,12 +2,21 @@ import crypto from 'crypto';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { googleAuthUrl, googleConfigured } from '../../../../lib/oauth';
+import { clientIp, rateLimit } from '../../../../lib/ratelimit';
 
 export async function GET(request) {
   if (!googleConfigured()) {
     return NextResponse.json(
-      { message: 'Google sign-in is not configured. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to your environment.' },
+      { message: 'Google sign-in is not configured.' },
       { status: 400 }
+    );
+  }
+
+  const ip = clientIp(request);
+  if (!rateLimit(`google-auth:${ip}`, 10, 60 * 1000)) {
+    return NextResponse.json(
+      { message: 'Too many authentication requests. Try again later.' },
+      { status: 429 }
     );
   }
 
@@ -20,7 +29,7 @@ export async function GET(request) {
     name: 'oauth_state',
     value: state,
     httpOnly: true,
-    sameSite: 'lax',
+    sameSite: 'strict',
     secure: process.env.NODE_ENV === 'production',
     path: '/',
     maxAge: 10 * 60,
