@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import SupportChatbot from '@/components/SupportChatbot';
+import ClientOnly from '@/components/ClientOnly';
 
 const SERVICE_BADGES = {
   no_login: { label: 'NO LOGIN NEEDED', icon: '🛡️', color: '#10B981', description: 'Only Gamertag needed to join session' },
@@ -91,33 +92,66 @@ export default function HomePage() {
     couponCode: '',
     discordUsername: '',
   });
-  const [reviews, setReviews] = useState(initialReviews);
   const [stats, setStats] = useState({ ordersCompleted: 2400, repeatBuyers: 98, averageRating: '4.8' });
-  const [orderStatus, setOrderStatus] = useState('');
-  const [orderBusy, setOrderBusy] = useState(false);
+  const [reviews, setReviews] = useState([]);
   const [reviewStatus, setReviewStatus] = useState('');
   const [buyer, setBuyer] = useState(null);
   const [authStatus, setAuthStatus] = useState('');
-  const [razorpayReady, setRazorpayReady] = useState(false);
   const [games, setGames] = useState(GAMES_CONFIG);
-  const [termsAccepted, setTermsAccepted] = useState(false);
   const [waitlistModal, setWaitlistModal] = useState({ open: false, gameId: '', launcherName: '' });
   const [waitlistEmail, setWaitlistEmail] = useState('');
   const [waitlistDiscord, setWaitlistDiscord] = useState('');
   const [waitlistStatus, setWaitlistStatus] = useState('');
-  const orderSectionRef = useRef(null);
+  const [activePlatform, setActivePlatform] = useState('all');
+  const [activeLauncher, setActiveLauncher] = useState('all');
+  const [productServices, setProductServices] = useState({});
+
+  const ALL_PLATFORMS = ['all', 'PC', 'PlayStation', 'Xbox', 'Nintendo Switch'];
+  const LAUNCHERS_FOR_PLATFORM = {
+    PC: ['all', 'Steam', 'Epic Games', 'Rockstar Launcher', 'Riot Client', 'Xbox App'],
+  };
 
   const categories = useMemo(() => {
     const seen = new Set(featuredAccounts.map((account) => account.category).filter(Boolean));
     return ['All', ...seen];
   }, [featuredAccounts]);
 
+  const availableGames = useMemo(() => {
+    if (activePlatform === 'all') return games;
+    return games.filter((g) => {
+      if (g.id === 'all') return true;
+      const gamePlatforms = PLATFORMS_BY_GAME[g.id] || [];
+      return gamePlatforms.includes(activePlatform);
+    });
+  }, [games, activePlatform]);
+
   const visibleAccounts = useMemo(() => {
-    if (activeCategory === 'All') {
-      return featuredAccounts;
+    let filtered = featuredAccounts;
+
+    if (activeGame !== 'all') {
+      filtered = filtered.filter((a) => a.gameId === activeGame);
     }
-    return featuredAccounts.filter((account) => account.category === activeCategory);
-  }, [featuredAccounts, activeCategory]);
+
+    if (activePlatform !== 'all') {
+      const platformGames = Object.entries(PLATFORMS_BY_GAME)
+        .filter(([, platforms]) => platforms.includes(activePlatform))
+        .map(([gameId]) => gameId);
+      filtered = filtered.filter((a) => platformGames.includes(a.gameId));
+    }
+
+    if (activePlatform === 'PC' && activeLauncher !== 'all') {
+      const launcherGames = Object.entries(LAUNCHERS_BY_GAME)
+        .filter(([, launchers]) => launchers.includes(activeLauncher))
+        .map(([gameId]) => gameId);
+      filtered = filtered.filter((a) => launcherGames.includes(a.gameId));
+    }
+
+    if (activeCategory !== 'All') {
+      filtered = filtered.filter((a) => a.category === activeCategory);
+    }
+
+    return filtered;
+  }, [featuredAccounts, activeGame, activePlatform, activeLauncher, activeCategory]);
 
   const refreshStore = async (gameId = null) => {
     const url = gameId && gameId !== 'all' ? `/api/store?gameId=${gameId}` : '/api/store';
@@ -155,19 +189,6 @@ export default function HomePage() {
       setAuthStatus('Google sign-in did not complete. Please try again.');
       window.history.replaceState({}, '', window.location.pathname);
     }
-
-    const existingScript = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
-    if (existingScript) {
-      setRazorpayReady(true);
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    script.async = true;
-    script.onload = () => setRazorpayReady(true);
-    script.onerror = () => setRazorpayReady(false);
-    document.body.appendChild(script);
   }, []);
 
   useEffect(() => {
@@ -185,16 +206,17 @@ export default function HomePage() {
 
   const selectAccount = (account) => {
     const gameId = account.gameId || 'gta5';
-    const gameConfig = GAMES_CONFIG.find((g) => g.id === gameId);
-    setForm((current) => ({
-      ...current,
-      game: account.title,
-      gameId,
-      serviceType: 'account_recovery',
-      launcher: LAUNCHERS_BY_GAME[gameId]?.[0] || 'Steam',
-      platformType: PLATFORMS_BY_GAME[gameId]?.[0] || 'PC',
-    }));
-    orderSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const gameName = GAMES_CONFIG.find(g => g.id === gameId)?.name || 'Custom Order';
+    const gameServices = SERVICE_TYPES[gameId] || SERVICE_TYPES.other;
+    const selectedService = productServices[account.id] || gameServices[0]?.id || 'account_recovery';
+    const params = new URLSearchParams({ game: gameId, service: selectedService, name: gameName });
+    if (activePlatform !== 'all') params.set('platform', activePlatform);
+    if (activePlatform === 'PC' && activeLauncher !== 'all') params.set('launcher', activeLauncher);
+    if (buyer) {
+      window.location.href = `/order?${params.toString()}`;
+    } else {
+      window.location.href = `/signin?redirect=${encodeURIComponent(`/order?${params.toString()}`)}`;
+    }
   };
 
   const handleGameChange = (gameId) => {
@@ -207,126 +229,6 @@ export default function HomePage() {
         platformType: PLATFORMS_BY_GAME[gameId]?.[0] || 'PC',
         serviceType: 'account_recovery',
       }));
-    }
-  };
-
-  const handleOrderSubmit = async (event) => {
-    event.preventDefault();
-
-    if (!buyer) {
-      setOrderStatus('Please sign in with Google to place an order.');
-      return;
-    }
-
-    if (!form.game.trim() || !form.launcher) {
-      setOrderStatus('Please select an offer and your launcher.');
-      return;
-    }
-
-    setOrderBusy(true);
-    setOrderStatus('Saving your order and preparing secure checkout...');
-
-    try {
-      const orderResponse = await fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      });
-
-      if (!orderResponse.ok) {
-        const result = await orderResponse.json();
-        setOrderStatus(result.message || 'Something went wrong while placing the order.');
-        return;
-      }
-
-      const order = await orderResponse.json();
-
-      const paymentResponse = await fetch('/api/payments/create-order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId: order.id }),
-      });
-
-      const paymentResult = await paymentResponse.json();
-
-      if (!paymentResponse.ok) {
-        setOrderStatus(paymentResult.message || 'Razorpay checkout could not be initialized.');
-        return;
-      }
-
-      const razorpayKeyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
-      if (!razorpayKeyId) {
-        setOrderStatus('Add NEXT_PUBLIC_RAZORPAY_KEY_ID to your environment to enable Razorpay checkout.');
-        return;
-      }
-
-      if (!razorpayReady || typeof window === 'undefined' || !window.Razorpay) {
-        setOrderStatus('Razorpay script is not ready yet. Reload the page or configure your keys.');
-        return;
-      }
-
-      const razorpay = new window.Razorpay({
-        key: razorpayKeyId,
-        amount: paymentResult.amount,
-        currency: paymentResult.currency,
-        name: 'GameVault Pro',
-        description: `Payment for ${form.game}`,
-        order_id: paymentResult.id,
-        prefill: {
-          name: form.name,
-          email: form.email,
-        },
-        handler: async function (paymentResponseData) {
-          setOrderStatus('Payment received. Verifying your Razorpay signature...');
-
-          const verifyResponse = await fetch('/api/payments/verify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              orderId: order.id,
-              razorpay_order_id: paymentResponseData.razorpay_order_id,
-              razorpay_payment_id: paymentResponseData.razorpay_payment_id,
-              razorpay_signature: paymentResponseData.razorpay_signature,
-            }),
-          });
-
-          const verifyResult = await verifyResponse.json();
-          if (!verifyResponse.ok) {
-            setOrderStatus(verifyResult.message || 'Payment verification failed. Please contact support.');
-            return;
-          }
-
-          setOrderStatus('Payment verified successfully. Your order is confirmed and queued for delivery.');
-        },
-        theme: {
-          color: '#5eead4',
-        },
-        modal: {
-          ondismiss: () => {
-            setOrderStatus('Checkout was closed before payment completed. Your order is saved as pending.');
-          },
-        },
-      });
-
-      setOrderStatus(
-        order.discountPaise > 0
-          ? `Promo ${order.couponCode} applied: ₹${(order.discountPaise / 100).toLocaleString('en-IN')} off. Order saved. Complete the Razorpay checkout to confirm your purchase.`
-          : 'Order saved. Complete the Razorpay checkout to confirm your purchase.'
-      );
-      setForm({
-        game: featuredAccounts[0]?.title || '',
-        gameId: featuredAccounts[0]?.gameId || 'gta5',
-        launcher: LAUNCHERS_BY_GAME[featuredAccounts[0]?.gameId || 'gta5']?.[0] || 'Steam',
-        launcherId: '',
-        accountId: '',
-        accountPassword: '',
-        note: '',
-        couponCode: '',
-        serviceType: 'account_recovery',
-      });
-      razorpay.open();
-    } finally {
-      setOrderBusy(false);
     }
   };
 
@@ -355,7 +257,6 @@ export default function HomePage() {
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
     setBuyer(null);
-    setOrderStatus('');
   };
 
   const currentGameConfig = GAMES_CONFIG.find((g) => g.id === form.gameId) || GAMES_CONFIG[0];
@@ -369,28 +270,23 @@ export default function HomePage() {
         <a className="brand" href="#top">GameVault <span>Pro</span></a>
         <nav className="site-nav">
           <a href="#catalog">Catalog</a>
-          <a href="#order">Order</a>
+          <a href={buyer ? '/order' : '/signin?redirect=%2Forder'}>Order</a>
           <a href="#reviews">Reviews</a>
           <a href="/dashboard">Dashboard</a>
-          <a href="/admin">Admin</a>
         </nav>
         <div className="account-widget">
           {buyer ? (
             <div className="account-widget-inner">
-              <span>Hi, {buyer.name}</span>
-              <a className="ghost-btn small" href="/dashboard">Dashboard</a>
+              <span className="user-name">{buyer.name}</span>
+              <a className="ghost-btn small" href="/dashboard">Orders</a>
+              <a className="ghost-btn small" href="/dashboard?tab=accounts">Profile</a>
               <button type="button" className="ghost-btn small" onClick={handleLogout}>Sign out</button>
             </div>
           ) : (
-            <a className="google-signin-btn" href="/api/auth/google">
-              <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
-                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-              </svg>
-              Sign in with Google
-            </a>
+            <div className="auth-links">
+              <a className="ghost-btn small" href="/signin">Sign In</a>
+              <a className="primary-btn small" href="/signup">Sign Up</a>
+            </div>
           )}
         </div>
       </header>
@@ -412,7 +308,7 @@ export default function HomePage() {
           </p>
           <div className="hero-actions">
             <a href="#catalog" className="primary-btn">Browse offers</a>
-            <a href="#order" className="secondary-btn">Place an order</a>
+            <a href={buyer ? '/order' : '/signin?redirect=%2Forder'} className="secondary-btn">Place an order</a>
             <a href="#how-it-works" className="ghost-btn">How it works</a>
           </div>
           <div className="trust-badges" aria-label="Trust and safety">
@@ -456,8 +352,48 @@ export default function HomePage() {
             <h2>Marketplace catalog</h2>
           </div>
         </div>
+        <ClientOnly fallback={
+          <>
+            <div className="game-selector" role="tablist" aria-label="Select game">
+              {games.map((game) => (
+                <div key={game.id} className="game-chip" style={{ height: 40, width: 100 }} />
+              ))}
+            </div>
+            <div className="filter-row" role="tablist" aria-label="Filter catalog">
+              <div className="filter-chip" style={{ height: 32, width: 60 }} />
+            </div>
+          </>
+        }>
+        <div className="platform-filter" role="tablist" aria-label="Select platform">
+          {ALL_PLATFORMS.map((platform) => (
+            <button
+              key={platform}
+              type="button"
+              className={`filter-chip${activePlatform === platform ? ' active' : ''}`}
+              onClick={() => { setActivePlatform(platform); setActiveLauncher('all'); setActiveGame('all'); }}
+            >
+              {platform === 'all' ? '🖥️ All Platforms' : platform === 'PC' ? '🖥️ PC' : platform === 'PlayStation' ? '🎮 PlayStation' : platform === 'Xbox' ? '🟢 Xbox' : '🟡 ' + platform}
+            </button>
+          ))}
+        </div>
+
+        {activePlatform === 'PC' && (
+          <div className="launcher-filter" role="tablist" aria-label="Select launcher">
+            {LAUNCHERS_FOR_PLATFORM.PC.map((launcher) => (
+              <button
+                key={launcher}
+                type="button"
+                className={`filter-chip small${activeLauncher === launcher ? ' active' : ''}`}
+                onClick={() => setActiveLauncher(launcher)}
+              >
+                {launcher === 'all' ? 'All Launchers' : launcher}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="game-selector" role="tablist" aria-label="Select game">
-          {games.map((game) => (
+          {availableGames.map((game) => (
             <button
               key={game.id}
               type="button"
@@ -482,6 +418,7 @@ export default function HomePage() {
             </button>
           ))}
         </div>
+        </ClientOnly>
         <div className="card-grid">
           {visibleAccounts.length === 0 ? (
             <div className="empty-state">
@@ -525,6 +462,16 @@ export default function HomePage() {
                   <h3>{account.title}</h3>
                   {account.category ? <p className="product-category">{account.category}</p> : null}
                   {account.description ? <p className="product-description">{account.description}</p> : null}
+                  <div className="product-service-select">
+                    <select
+                      value={productServices[account.id] || (SERVICE_TYPES[account.gameId] || SERVICE_TYPES.other)[0]?.id}
+                      onChange={(e) => setProductServices(prev => ({ ...prev, [account.id]: e.target.value }))}
+                    >
+                      {(SERVICE_TYPES[account.gameId] || SERVICE_TYPES.other).map((st) => (
+                        <option key={st.id} value={st.id}>{st.label}</option>
+                      ))}
+                    </select>
+                  </div>
                   <div className="product-meta">
                     <span>{account.rating} ★</span>
                     <span>{account.stock}</span>
@@ -560,9 +507,7 @@ export default function HomePage() {
               <span className="combo-original">₹18,999</span>
               <span className="combo-final">₹12,999</span>
             </div>
-            <button className="primary-btn" onClick={() => { selectAccount({ title: 'GTA 5 100M + Level 120 + All Unlocks', gameId: 'gta5', category: 'Custom services' }); }}>
-              Buy Now
-            </button>
+            <a href={buyer ? '/order?game=gta5&service=account_recovery&name=GTA+V' : '/signin?redirect=%2Forder%3Fgame%3Dgta5%26service%3Daccount_recovery%26name%3DGTA%2BV'} className="primary-btn block">Buy Now</a>
           </div>
           <div className="combo-card">
             <div className="combo-badge">SAVE 20%</div>
@@ -572,9 +517,7 @@ export default function HomePage() {
               <span className="combo-original">₹3,999</span>
               <span className="combo-final">₹2,999</span>
             </div>
-            <button className="primary-btn" onClick={() => { selectAccount({ title: 'Valorant Iron to Gold Boost', gameId: 'valorant', category: 'Rank boost' }); }}>
-              Buy Now
-            </button>
+            <a href={buyer ? '/order?game=valorant&service=boosting&name=Valorant' : '/signin?redirect=%2Forder%3Fgame%3Dvalorant%26service%3Dboosting%26name%3DValorant'} className="primary-btn block">Buy Now</a>
           </div>
           <div className="combo-card">
             <div className="combo-badge">SAVE 15%</div>
@@ -584,9 +527,7 @@ export default function HomePage() {
               <span className="combo-original">₹5,499</span>
               <span className="combo-final">₹4,499</span>
             </div>
-            <button className="primary-btn" onClick={() => { selectAccount({ title: 'Fortnite V-Bucks 5000', gameId: 'fortnite', category: 'V-Bucks' }); }}>
-              Buy Now
-            </button>
+            <a href={buyer ? '/order?game=fortnite&service=premade_account&name=Fortnite' : '/signin?redirect=%2Forder%3Fgame%3Dfortnite%26service%3Dpremade_account%26name%3DFortnite'} className="primary-btn block">Buy Now</a>
           </div>
         </div>
       </section>
@@ -601,23 +542,23 @@ export default function HomePage() {
         <div className="steps-grid">
           <div className="step-card">
             <span className="step-number">1</span>
-            <h3>Sign in with Google</h3>
-            <p>One quick sign-in so we know who is ordering and where to send updates.</p>
+            <h3>Sign in and choose</h3>
+            <p>Create an account or sign in, then pick your game and the service you need.</p>
           </div>
           <div className="step-card">
             <span className="step-number">2</span>
-            <h3>Pick your game and offer</h3>
-            <p>Choose your game, then select from money packs, rank boosts, or account services.</p>
+            <h3>Select your service type</h3>
+            <p>Choose from account recovery, in-game carry, boosting, or premade accounts — each has different requirements.</p>
           </div>
           <div className="step-card">
             <span className="step-number">3</span>
-            <h3>Share your account securely</h3>
-            <p>Tell us your launcher and account details. They are encrypted immediately and only used for delivery.</p>
+            <h3>Provide what&apos;s needed</h3>
+            <p>Some services only need your gamertag. Others require login details — we&apos;ll tell you upfront what&apos;s required.</p>
           </div>
           <div className="step-card">
             <span className="step-number">4</span>
-            <h3>Pay and get it done</h3>
-            <p>Check out safely with Razorpay. We deliver on your account and confirm when it&apos;s complete.</p>
+            <h3>Pay and relax</h3>
+            <p>Check out safely with Razorpay. We handle the rest and notify you when it&apos;s done.</p>
           </div>
         </div>
 
@@ -629,259 +570,45 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section id="order" ref={orderSectionRef} className="order-layout">
-        <div className="order-card">
-          <span className="eyebrow">Place an order</span>
-          <h2>Request a purchase</h2>
-          {authStatus ? <p className="status-text">{authStatus}</p> : null}
-          {!buyer ? (
-            <div className="signin-required">
-              <p>You must sign in with Google before placing an order.</p>
-              <a className="primary-btn" href="/api/auth/google">Sign in with Google</a>
-            </div>
-          ) : null}
-          <form onSubmit={handleOrderSubmit} className="order-form">
-            <div className="identity-card">
-              <div>
-                <span>Ordering as</span>
-                <strong>{buyer ? buyer.name : '—'}</strong>
+      <section id="reviews" className="review-card">
+        <span className="eyebrow">Customer reviews</span>
+        <h2>What buyers say</h2>
+        <div className="review-list">
+          {reviews.map((review, index) => (
+            <article className="review-item" key={`${review.name}-${index}`}>
+              <div className="review-head">
+                <strong>{review.name}</strong>
+                <span>{review.rating} ★</span>
               </div>
-              <div>
-                <span>Email</span>
-                <strong>{buyer ? buyer.email : '—'}</strong>
-              </div>
-            </div>
-
-            <label>
-              Select game
-              <select value={form.gameId} onChange={(e) => handleGameChange(e.target.value)}>
-                {GAMES_CONFIG.filter((g) => g.id !== 'all').map((game) => (
-                  <option key={game.id} value={game.id}>
-                    {game.icon} {game.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label>
-              Service type
-              <select value={form.serviceType} onChange={(e) => setForm({ ...form, serviceType: e.target.value })}>
-                {currentServiceTypes.map((st) => {
-                  const badge = SERVICE_BADGES[st.badge || 'login_required'];
-                  return (
-                    <option key={st.id} value={st.id}>
-                      {badge?.icon || ''} {st.label} [{badge?.label || ''}]
-                    </option>
-                  );
-                })}
-              </select>
-            </label>
-            {currentServiceTypes.find((st) => st.id === form.serviceType) && (
-              <div className="service-type-info" style={{ backgroundColor: SERVICE_BADGES[currentServiceTypes.find((st) => st.id === form.serviceType).badge || 'login_required']?.color + '10', border: `1px solid ${SERVICE_BADGES[currentServiceTypes.find((st) => st.id === form.serviceType).badge || 'login_required']?.color}30`, borderRadius: '8px', padding: '12px', marginBottom: '16px' }}>
-                <p style={{ color: SERVICE_BADGES[currentServiceTypes.find((st) => st.id === form.serviceType).badge || 'login_required']?.color, fontSize: '14px' }}>
-                  {SERVICE_BADGES[currentServiceTypes.find((st) => st.id === form.serviceType).badge || 'login_required']?.icon}{' '}
-                  {SERVICE_BADGES[currentServiceTypes.find((st) => st.id === form.serviceType).badge || 'login_required']?.description}
-                </p>
-              </div>
-            )}
-
-            <label>
-              Select offer
-              <select value={form.game} onChange={(e) => setForm({ ...form, game: e.target.value })}>
-                <option value="">Choose an offer</option>
-                {featuredAccounts
-                  .filter((a) => form.gameId === 'all' || a.gameId === form.gameId)
-                  .map((item) => (
-                    <option key={item.id ?? item.title} value={item.title}>
-                      {item.title}
-                    </option>
-                  ))}
-              </select>
-            </label>
-
-            <fieldset className="launcher-fieldset">
-              <legend>Your game launcher</legend>
-              <div className="launcher-options">
-                {currentLaunchers.map((launcher) => {
-                  const status = LAUNCHER_STATUSES[launcher] || 'active';
-                  const isInactive = status === 'inactive';
-                  return (
-                    <label className={`launcher-option${isInactive ? ' inactive' : ''}`} key={launcher}>
-                      <input
-                        type="radio"
-                        name="launcher"
-                        value={launcher}
-                        checked={form.launcher === launcher}
-                        disabled={isInactive}
-                        onChange={(e) => setForm({ ...form, launcher: e.target.value, launcherId: '' })}
-                      />
-                      <span>{launcher}</span>
-                      {isInactive && (
-                        <button
-                          type="button"
-                          className="waitlist-btn"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            setWaitlistModal({ open: true, gameId: form.gameId, launcherName: launcher });
-                          }}
-                        >
-                          🔔 Join Waitlist
-                        </button>
-                      )}
-                    </label>
-                  );
-                })}
-              </div>
-            </fieldset>
-
-            <fieldset className="launcher-fieldset">
-              <legend>Platform Selection</legend>
-              <div className="platform-selector">
-                <span className="selector-label">Platform:</span>
-                {currentPlatforms.map((platform) => (
-                  <label className="platform-option" key={platform}>
-                    <input
-                      type="radio"
-                      name="platformType"
-                      value={platform}
-                      checked={form.platformType === platform}
-                      onChange={(e) => setForm({ ...form, platformType: e.target.value, launcher: currentLaunchers[0], launcherId: '', psnId: '', xboxLiveId: '', epicId: '', socialClubId: '' })}
-                    />
-                    <span>{platform}</span>
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-
-            <label>
-              Platform-specific ID
-              <div className="launcher-id-input">
-                {form.platformType === 'PC' && currentLaunchers.map((launcher) => (
-                  launcher === form.launcher && (
-                    <input
-                      key={launcher}
-                      value={form.launcherId || ''}
-                      onChange={(e) => setForm({ ...form, launcherId: e.target.value })}
-                      placeholder={`${launcher} ID`}
-                    />
-                  )
-                ))}
-                {form.platformType === 'PlayStation' && (
-                  <input
-                    value={form.psnId || ''}
-                    onChange={(e) => setForm({ ...form, psnId: e.target.value })}
-                    placeholder="PSN ID or Email"
-                  />
-                )}
-                {form.platformType === 'Xbox' && (
-                  <input
-                    value={form.xboxLiveId || ''}
-                    onChange={(e) => setForm({ ...form, xboxLiveId: e.target.value })}
-                    placeholder="Xbox Live ID or Email"
-                  />
-                )}
-                {!form.platformType && (
-                  <div className="launcher-id-placeholder">
-                    <span>Select a platform first</span>
-                  </div>
-                )}
-              </div>
-            </label>
-
-            <label>
-              Account ID (email / username)
-              <input value={form.accountId} onChange={(e) => setForm({ ...form, accountId: e.target.value })} placeholder="ID or email used to sign in" />
-            </label>
-
-            <label>
-              Account password
-              <input type="password" value={form.accountPassword} onChange={(e) => setForm({ ...form, accountPassword: e.target.value })} placeholder="Password for the account" autoComplete="new-password" />
-            </label>
-
-            <p className="security-note">
-              Credentials are encrypted before they ever reach the database, and are only
-              revealed after payment to deliver your order. Learn more on our{' '}
-              <a href="/safety" className="inline-link">safety &amp; privacy page</a>.
-            </p>
-            <ul className="order-promises">
-              <li>No account changes beyond what your offer requires.</li>
-              <li>Password is never stored in plain text.</li>
-              <li>Use a temporary password if you prefer — we only need it once.</li>
-            </ul>
-
-            <label>
-              Discord username (for updates)
-              <input value={form.discordUsername || ''} onChange={(e) => setForm({ ...form, discordUsername: e.target.value })} placeholder="Your Discord username" />
-            </label>
-
-            <label>
-              Additional info
-              <textarea value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="Preferred delivery time or extra requirements" />
-            </label>
-
-            <label>
-              Promo code (optional)
-              <input value={form.couponCode} onChange={(e) => setForm({ ...form, couponCode: e.target.value })} placeholder="Enter a promo code" />
-            </label>
-
-            <div className="terms-checkbox">
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={termsAccepted}
-                  onChange={(e) => setTermsAccepted(e.target.checked)}
-                />
-                <span className="checkbox-text">
-                  I agree to the <a href="/terms" className="inline-link">Terms of Service</a> & <a href="/warranty" className="inline-link">30-Day Anti-Ban Warranty Policy</a>. I agree to inspect my account and report any order discrepancies within 24 hours to keep my warranty valid.
-                </span>
-              </label>
-            </div>
-
-            <button type="submit" className="primary-btn full" disabled={orderBusy || !buyer || !termsAccepted}>
-              {!buyer ? 'Sign in to order' : orderBusy ? 'Processing...' : !termsAccepted ? 'Accept terms to continue' : 'Pay via Razorpay'}
-            </button>
-            {orderStatus ? <p className="status-text">{orderStatus}</p> : null}
-          </form>
+              <p>{review.comment}</p>
+            </article>
+          ))}
         </div>
 
-        <div id="reviews" className="review-card">
-          <span className="eyebrow">Customer reviews</span>
-          <h2>What buyers say</h2>
-          <div className="review-list">
-            {reviews.map((review, index) => (
-              <article className="review-item" key={`${review.name}-${index}`}>
-                <div className="review-head">
-                  <strong>{review.name}</strong>
-                  <span>{review.rating} ★</span>
-                </div>
-                <p>{review.comment}</p>
-              </article>
-            ))}
-          </div>
-
-          <form className="review-form" onSubmit={handleReviewSubmit}>
-            <label>
-              Name
-              <input name="name" placeholder="Your name" />
-            </label>
-            <label>
-              Rating
-              <select name="rating">
-                <option value="5.0">5.0</option>
-                <option value="4.5">4.5</option>
-                <option value="4.0">4.0</option>
-                <option value="3.5">3.5</option>
-                <option value="3.0">3.0</option>
-              </select>
-            </label>
-            <label>
-              Review
-              <textarea name="comment" placeholder="Share your experience" />
-            </label>
-            <button type="submit" className="secondary-btn full">Submit review</button>
-            {reviewStatus ? <p className="status-text">{reviewStatus}</p> : null}
-          </form>
-        </div>
+        <ClientOnly fallback={<div className="review-form" style={{ minHeight: 200 }} />}>
+        <form className="review-form" onSubmit={handleReviewSubmit}>
+          <label>
+            Name
+            <input name="name" placeholder="Your name" />
+          </label>
+          <label>
+            Rating
+            <select name="rating">
+              <option value="5.0">5.0</option>
+              <option value="4.5">4.5</option>
+              <option value="4.0">4.0</option>
+              <option value="3.5">3.5</option>
+              <option value="3.0">3.0</option>
+            </select>
+          </label>
+          <label>
+            Review
+            <textarea name="comment" placeholder="Share your experience" />
+          </label>
+          <button type="submit" className="secondary-btn full">Submit review</button>
+          {reviewStatus ? <p className="status-text">{reviewStatus}</p> : null}
+        </form>
+        </ClientOnly>
       </section>
 
       <section id="faq" className="faq-section">

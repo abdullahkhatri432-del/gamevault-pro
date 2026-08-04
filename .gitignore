@@ -20,3 +20,4 @@ cookies.txt
 # Logs / misc
 *.log
 .DS_Store
+check_css.js

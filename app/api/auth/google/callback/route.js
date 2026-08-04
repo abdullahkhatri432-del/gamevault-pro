@@ -4,9 +4,18 @@ import { exchangeGoogleCode, fetchGoogleProfile } from '../../../../../lib/oauth
 import { findOrCreateGoogleUser } from '../../../../../lib/store';
 import { sign } from '../../../../../lib/session';
 
-function clearStateCookie(response) {
+function clearOAuthCookies(response) {
   response.cookies.set({
     name: 'oauth_state',
+    value: '',
+    httpOnly: true,
+    sameSite: 'strict',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    maxAge: 0,
+  });
+  response.cookies.set({
+    name: 'oauth_redirect',
     value: '',
     httpOnly: true,
     sameSite: 'strict',
@@ -25,18 +34,23 @@ export async function GET(request) {
 
   const cookieStore = await cookies();
   const stateCookie = cookieStore.get('oauth_state');
+  const redirectCookie = cookieStore.get('oauth_redirect');
+  const redirectTo = redirectCookie?.value || '/';
 
   const home = new URL('/', request.url);
 
   if (error) {
-    const response = NextResponse.redirect(home);
-    return clearStateCookie(response);
+    const failUrl = new URL('/', request.url);
+    failUrl.searchParams.set('auth', 'failed');
+    const response = NextResponse.redirect(failUrl);
+    return clearOAuthCookies(response);
   }
 
   if (!state || !stateCookie || state !== stateCookie.value) {
-    const response = NextResponse.redirect(home);
-    home.searchParams.set('auth', 'failed');
-    return clearStateCookie(response);
+    const failUrl = new URL('/', request.url);
+    failUrl.searchParams.set('auth', 'failed');
+    const response = NextResponse.redirect(failUrl);
+    return clearOAuthCookies(response);
   }
 
   const redirectUri = `${url.origin}/api/auth/google/callback`;
@@ -51,7 +65,8 @@ export async function GET(request) {
       email: profile.email,
     });
 
-    const response = NextResponse.redirect(home);
+    const destUrl = new URL(redirectTo, request.url);
+    const response = NextResponse.redirect(destUrl);
     response.cookies.set({
       name: 'gamevault_user',
       value: sign({ scope: 'user', id: user.id, exp: Date.now() + 7 * 24 * 60 * 60 * 1000 }),
@@ -62,10 +77,11 @@ export async function GET(request) {
       maxAge: 60 * 60 * 24 * 7,
     });
 
-    return clearStateCookie(response);
+    return clearOAuthCookies(response);
   } catch (oauthError) {
-    const response = NextResponse.redirect(home);
-    home.searchParams.set('auth', 'failed');
-    return clearStateCookie(response);
+    const failUrl = new URL('/', request.url);
+    failUrl.searchParams.set('auth', 'failed');
+    const response = NextResponse.redirect(failUrl);
+    return clearOAuthCookies(response);
   }
 }

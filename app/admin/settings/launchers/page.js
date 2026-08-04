@@ -16,13 +16,21 @@ const LAUNCHERS = {
   valorant: ['Riot Client'],
   fortnite: ['Epic Games'],
   forza: ['Xbox App', 'Steam'],
-  other: ['Steam', 'Epic Games', 'Other'],
+  other: ['Steam', 'Epic Games'],
+};
+
+const LAUNCHER_ICONS = {
+  Steam: '⚙️',
+  'Epic Games': '🎮',
+  'Rockstar Launcher': '🏍️',
+  'Riot Client': '🔫',
+  'Xbox App': '🎮',
 };
 
 const STATUS_CONFIG = {
-  active: { label: 'ACTIVE', color: '#10B981', bg: '#10B98120', icon: '🟢' },
-  inactive: { label: 'INACTIVE / MAINTENANCE', color: '#EF4444', bg: '#EF444420', icon: '🔴' },
-  coming_soon: { label: 'COMING SOON', color: '#F59E0B', bg: '#F59E0B20', icon: '🟡' },
+  active: { label: 'Active', color: '#10B981', icon: '✅' },
+  inactive: { label: 'Maintenance', color: '#EF4444', icon: '🔴' },
+  coming_soon: { label: 'Coming Soon', color: '#F59E0B', icon: '🟡' },
 };
 
 export default function LauncherSettingsPage() {
@@ -99,81 +107,91 @@ export default function LauncherSettingsPage() {
         <div>
           <span className="eyebrow">Launcher Management</span>
           <h1>Dynamic Launcher Controls</h1>
+          <p className="admin-hero-sub">Manage launcher availability for each game. Changes reflect instantly on the order page.</p>
         </div>
         <div className="admin-hero-actions">
-          <a className="secondary-btn" href="/admin">Back to Admin</a>
+          <a className="secondary-btn" href="/admin">← Back to Admin</a>
         </div>
       </section>
 
       {status && (
-        <div className="bg-[#10B98120] border border-[#10B98150] rounded-lg p-4 mb-6">
-          <p className="text-[#10B981]">{status}</p>
+        <div className="status-banner">
+          <span>{status}</span>
+          <button onClick={() => setStatus('')} className="status-close">×</button>
         </div>
       )}
 
-      <section className="space-y-6">
-        {GAMES_CONFIG.map((game) => (
-          <article key={game.id} className="admin-card">
-            <div className="flex items-center gap-3 mb-6">
-              <span className="text-2xl">{game.icon}</span>
-              <h2 className="text-xl font-bold">{game.name}</h2>
-              <span className="px-3 py-1 rounded-full text-xs font-medium" style={{ backgroundColor: game.color + '20', color: game.color }}>
-                {LAUNCHERS[game.id]?.length || 0} Launchers
-              </span>
-            </div>
+      <section className="launcher-admin-grid">
+        {GAMES_CONFIG.map((game) => {
+          const gameLaunchers = LAUNCHERS[game.id] || [];
+          const activeCount = gameLaunchers.filter(l => getLauncherStatus(game.id, l) === 'active').length;
 
-            <div className="space-y-4">
-              {(LAUNCHERS[game.id] || []).map((launcher) => {
-                const currentStatus = getLauncherStatus(game.id, launcher);
-                const statusConfig = STATUS_CONFIG[currentStatus] || STATUS_CONFIG.inactive;
-
-                return (
-                  <div key={launcher} className="flex items-center justify-between p-4 bg-[#27272A] rounded-lg border border-[#374151]">
-                    <div className="flex items-center gap-4">
-                      <span className="text-lg">{statusConfig.icon}</span>
-                      <div>
-                        <h3 className="font-semibold">{launcher}</h3>
-                        <p className="text-sm text-[#9CA3AF]">
-                          {currentStatus === 'active' ? 'Available for orders' : currentStatus === 'coming_soon' ? 'Coming soon' : 'Under maintenance'}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <span className="px-3 py-1 rounded-full text-xs font-medium" style={{ backgroundColor: statusConfig.bg, color: statusConfig.color }}>
-                        {statusConfig.label}
-                      </span>
-
-                      <div className="flex gap-2">
-                        <button
-                          className={`px-3 py-1 rounded text-xs font-medium transition-colors ${currentStatus === 'active' ? 'bg-[#10B981] text-white' : 'bg-[#27272A] text-[#9CA3AF] hover:bg-[#10B981]/20 hover:text-[#10B981]'}`}
-                          onClick={() => updateLauncherStatus(game.id, launcher, 'active')}
-                          disabled={saving}
-                        >
-                          🟢 Activate
-                        </button>
-                        <button
-                          className={`px-3 py-1 rounded text-xs font-medium transition-colors ${currentStatus === 'inactive' ? 'bg-[#EF4444] text-white' : 'bg-[#27272A] text-[#9CA3AF] hover:bg-[#EF4444]/20 hover:text-[#EF4444]'}`}
-                          onClick={() => updateLauncherStatus(game.id, launcher, 'inactive')}
-                          disabled={saving}
-                        >
-                          🔴 Deactivate
-                        </button>
-                        <button
-                          className={`px-3 py-1 rounded text-xs font-medium transition-colors ${currentStatus === 'coming_soon' ? 'bg-[#F59E0B] text-white' : 'bg-[#27272A] text-[#9CA3AF] hover:bg-[#F59E0B]/20 hover:text-[#F59E0B]'}`}
-                          onClick={() => updateLauncherStatus(game.id, launcher, 'coming_soon')}
-                          disabled={saving}
-                        >
-                          🟡 Coming Soon
-                        </button>
-                      </div>
-                    </div>
+          return (
+            <article key={game.id} className="launcher-admin-card">
+              <div className="launcher-admin-header" style={{ borderColor: game.color + '40' }}>
+                <div className="launcher-admin-game">
+                  <span className="launcher-admin-icon">{game.icon}</span>
+                  <div>
+                    <h2 className="launcher-admin-title">{game.name}</h2>
+                    <span className="launcher-admin-count">{activeCount}/{gameLaunchers.length} active</span>
                   </div>
-                );
-              })}
-            </div>
-          </article>
-        ))}
+                </div>
+                <span className="launcher-admin-badge" style={{ backgroundColor: game.color + '20', color: game.color }}>
+                  {gameLaunchers.length} Launchers
+                </span>
+              </div>
+
+              <div className="launcher-admin-list">
+                {gameLaunchers.map((launcher) => {
+                  const currentStatus = getLauncherStatus(game.id, launcher);
+                  const statusConfig = STATUS_CONFIG[currentStatus] || STATUS_CONFIG.inactive;
+                  const launcherIcon = LAUNCHER_ICONS[launcher] || '🎮';
+
+                  return (
+                    <div key={launcher} className={`launcher-admin-item ${currentStatus}`}>
+                      <div className="launcher-admin-item-info">
+                        <span className="launcher-admin-item-icon">{launcherIcon}</span>
+                        <div className="launcher-admin-item-details">
+                          <h3 className="launcher-admin-item-name">{launcher}</h3>
+                          <span className="launcher-admin-item-desc">
+                            {currentStatus === 'active' && 'Available for orders'}
+                            {currentStatus === 'coming_soon' && 'Coming soon to the platform'}
+                            {currentStatus === 'inactive' && 'Under safety maintenance'}
+                          </span>
+                        </div>
+                        <span className="launcher-admin-status-dot" style={{ backgroundColor: statusConfig.color }} title={statusConfig.label}></span>
+                      </div>
+
+                      <div className="launcher-admin-actions">
+                        <button
+                          className={`launcher-admin-btn ${currentStatus === 'active' ? 'active' : ''}`}
+                          onClick={() => updateLauncherStatus(game.id, launcher, 'active')}
+                          disabled={saving || currentStatus === 'active'}
+                        >
+                          <span>✅</span> Activate
+                        </button>
+                        <button
+                          className={`launcher-admin-btn ${currentStatus === 'inactive' ? 'inactive' : ''}`}
+                          onClick={() => updateLauncherStatus(game.id, launcher, 'inactive')}
+                          disabled={saving || currentStatus === 'inactive'}
+                        >
+                          <span>🔴</span> Maintenance
+                        </button>
+                        <button
+                          className={`launcher-admin-btn ${currentStatus === 'coming_soon' ? 'coming-soon' : ''}`}
+                          onClick={() => updateLauncherStatus(game.id, launcher, 'coming_soon')}
+                          disabled={saving || currentStatus === 'coming_soon'}
+                        >
+                          <span>🟡</span> Coming Soon
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </article>
+          );
+        })}
       </section>
     </main>
   );

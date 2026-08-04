@@ -20,6 +20,9 @@ export async function GET(request) {
     );
   }
 
+  const url = new URL(request.url);
+  const redirectTo = url.searchParams.get('redirect') || '/';
+
   const origin = new URL(request.url).origin;
   const redirectUri = `${origin}/api/auth/google/callback`;
   const state = crypto.randomBytes(24).toString('hex');
@@ -28,6 +31,15 @@ export async function GET(request) {
   cookieStore.set({
     name: 'oauth_state',
     value: state,
+    httpOnly: true,
+    sameSite: 'strict',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    maxAge: 10 * 60,
+  });
+  cookieStore.set({
+    name: 'oauth_redirect',
+    value: redirectTo,
     httpOnly: true,
     sameSite: 'strict',
     secure: process.env.NODE_ENV === 'production',

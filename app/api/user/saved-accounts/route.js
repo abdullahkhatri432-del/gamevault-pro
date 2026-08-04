@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
-import { verifySessionToken } from '@/lib/session';
+import { cookies } from 'next/headers';
+import { verify } from '@/lib/session';
+import { getUserById } from '@/lib/store';
 import { getDb } from '@/lib/db';
 
 const db = getDb();
@@ -8,7 +10,7 @@ function ensureSavedAccountsTable() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS saved_accounts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL UNIQUE,
       steam_id TEXT DEFAULT '',
       epic_id TEXT DEFAULT '',
       social_club_id TEXT DEFAULT '',
@@ -37,20 +39,25 @@ const upsertSavedAccounts = db.prepare(`
     updated_at = @updatedAt
 `);
 
+async function getAuthenticatedUser() {
+  const cookieStore = await cookies();
+  const userCookie = cookieStore.get('gamevault_user');
+  if (!userCookie?.value) return null;
+
+  const payload = verify(userCookie.value);
+  if (!payload || payload.scope !== 'user' || typeof payload.exp !== 'number' || payload.exp < Date.now()) return null;
+
+  return getUserById(payload.id);
+}
+
 export async function GET() {
   try {
-    const cookieHeader = globalThis.headers?.get?.('cookie') || '';
-    const sessionMatch = cookieHeader.match(/session=([^;]+)/);
-    if (!sessionMatch) {
+    const user = await getAuthenticatedUser();
+    if (!user) {
       return NextResponse.json({ message: 'Not authenticated.' }, { status: 401 });
     }
 
-    const session = await verifySessionToken(sessionMatch[1]);
-    if (!session || !session.userId) {
-      return NextResponse.json({ message: 'Invalid session.' }, { status: 401 });
-    }
-
-    const saved = getSavedAccounts.get({ userId: session.userId });
+    const saved = getSavedAccounts.get({ userId: user.id });
     return NextResponse.json(saved || {
       steamId: '',
       epicId: '',
@@ -66,20 +73,14 @@ export async function GET() {
 
 export async function POST(request) {
   try {
-    const cookieHeader = globalThis.headers?.get?.('cookie') || '';
-    const sessionMatch = cookieHeader.match(/session=([^;]+)/);
-    if (!sessionMatch) {
+    const user = await getAuthenticatedUser();
+    if (!user) {
       return NextResponse.json({ message: 'Not authenticated.' }, { status: 401 });
-    }
-
-    const session = await verifySessionToken(sessionMatch[1]);
-    if (!session || !session.userId) {
-      return NextResponse.json({ message: 'Invalid session.' }, { status: 401 });
     }
 
     const body = await request.json();
     const entry = {
-      userId: session.userId,
+      userId: user.id,
       steamId: String(body.steamId || '').trim().slice(0, 200),
       epicId: String(body.epicId || '').trim().slice(0, 200),
       socialClubId: String(body.socialClubId || '').trim().slice(0, 200),
