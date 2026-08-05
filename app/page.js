@@ -447,6 +447,9 @@ export default function HomePage() {
               return (
                 <article className="product-card" key={account.id ?? account.title}>
                   {isPopular ? <span className="popular-ribbon">Most popular</span> : null}
+                  <div className="product-digital-badge">
+                    <span className="digital-badge-icon">⚡</span> Digital Service
+                  </div>
                   <div className="product-game-badge" style={{ backgroundColor: `${gameConfig.color}20`, color: gameConfig.color }}>
                     {gameConfig.icon} {gameConfig.name}
                   </div>
@@ -517,6 +520,14 @@ export default function HomePage() {
                     <span>{account.rating} ★</span>
                     <span>{account.stock}</span>
                     {account.supportedRegions ? <span className="product-region">{account.supportedRegions}</span> : null}
+                    {account.availability ? (
+                      <span className={`product-availability availability-${account.availability}`}>
+                        {account.availability === 'available' ? '✅ Available' :
+                         account.availability === 'limited' ? '⏳ Limited' :
+                         account.availability === 'on_request' ? '📋 On Request' :
+                         '❌ Unavailable'}
+                      </span>
+                    ) : null}
                   </div>
 
                   {account.fulfillmentMethod ? (
@@ -535,6 +546,15 @@ export default function HomePage() {
                     <div className="price-group">
                       {account.originalPrice ? <span className="product-original-price">{account.originalPrice}</span> : null}
                       <strong>{account.price}</strong>
+                      {account.originalPrice ? (() => {
+                        const current = Number(String(account.price || '').replace(/[^0-9.]/g, ''));
+                        const original = Number(String(account.originalPrice || '').replace(/[^0-9.]/g, ''));
+                        if (original > 0 && current > 0 && original > current) {
+                          const pct = Math.round(((original - current) / original) * 100);
+                          return <span className="product-discount-badge">-{pct}%</span>;
+                        }
+                        return null;
+                      })() : null}
                     </div>
                     <button className="primary-btn small" type="button" onClick={() => selectAccount(account)}>Buy now</button>
                   </div>

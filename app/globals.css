@@ -549,6 +549,74 @@ h3 {
   margin-bottom: 12px;
 }
 
+.product-digital-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(6, 182, 212, 0.15));
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #10B981;
+  margin-bottom: 8px;
+}
+
+.digital-badge-icon {
+  font-size: 0.85rem;
+}
+
+.product-discount-badge {
+  display: inline-flex;
+  align-items: center;
+  background: #EF4444;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-left: 8px;
+  letter-spacing: 0.02em;
+}
+
+.product-availability {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-left: 4px;
+}
+
+.availability-available {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10B981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.availability-limited {
+  background: rgba(245, 158, 11, 0.15);
+  color: #F59E0B;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.availability-on_request {
+  background: rgba(59, 130, 246, 0.15);
+  color: #3B82F6;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.availability-unavailable {
+  background: rgba(107, 114, 128, 0.15);
+  color: #6B7280;
+  border: 1px solid rgba(107, 114, 128, 0.3);
+}
+
 .service-badge {
   display: inline-flex;
   align-items: center;

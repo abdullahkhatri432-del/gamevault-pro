@@ -32,6 +32,7 @@ const createEmptyProduct = () => ({
   fulfillmentMethod: 'account_login',
   importantNotes: '',
   supportedRegions: '',
+  availability: 'available',
 });
 
 const formatPaise = (paise) => `₹${(Number(paise || 0) / 100).toLocaleString('en-IN')}`;
@@ -427,6 +428,15 @@ export default function AdminPage() {
             <label>
               Supported regions
               <input value={productForm.supportedRegions} onChange={(event) => setProductForm({ ...productForm, supportedRegions: event.target.value })} placeholder="Global / US & EU / Asia only" />
+            </label>
+            <label>
+              Availability
+              <select value={productForm.availability} onChange={(event) => setProductForm({ ...productForm, availability: event.target.value })}>
+                <option value="available">Available now</option>
+                <option value="limited">Limited availability</option>
+                <option value="on_request">Available on request</option>
+                <option value="unavailable">Unavailable</option>
+              </select>
             </label>
             <button className="primary-btn" type="submit">Add service</button>
             {productStatus ? <p className="status-text">{productStatus}</p> : null}

@@ -53,6 +53,7 @@ export async function PATCH(request, { params }) {
       fulfillmentMethod: truncate(sanitizeString(payload.fulfillmentMethod || payload.fulfillment_method), 100),
       importantNotes: truncate(sanitizeString(payload.importantNotes || payload.important_notes), 2000),
       supportedRegions: truncate(sanitizeString(payload.supportedRegions || payload.supported_regions), 200),
+      availability: truncate(sanitizeString(payload.availability), 50),
     });
     return NextResponse.json(updatedProduct);
   } catch (error) {
