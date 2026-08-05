@@ -205,18 +205,7 @@ export default function HomePage() {
   }, [reviews, stats.averageRating]);
 
   const selectAccount = (account) => {
-    const gameId = account.gameId || 'gta5';
-    const gameName = GAMES_CONFIG.find(g => g.id === gameId)?.name || 'Custom Order';
-    const gameServices = SERVICE_TYPES[gameId] || SERVICE_TYPES.other;
-    const selectedService = productServices[account.id] || gameServices[0]?.id || 'account_recovery';
-    const params = new URLSearchParams({ game: gameId, service: selectedService, name: gameName, productId: account.id });
-    if (activePlatform !== 'all') params.set('platform', activePlatform);
-    if (activePlatform === 'PC' && activeLauncher !== 'all') params.set('launcher', activeLauncher);
-    if (buyer) {
-      window.location.href = `/order?${params.toString()}`;
-    } else {
-      window.location.href = `/signin?redirect=${encodeURIComponent(`/order?${params.toString()}`)}`;
-    }
+    window.location.href = `/service/${account.id}`;
   };
 
   const handleGameChange = (gameId) => {
