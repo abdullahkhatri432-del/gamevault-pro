@@ -3,12 +3,14 @@ import { NextResponse } from 'next/server';
 import { createAdminToken } from '../../../../lib/admin';
 import { clientIp, rateLimit } from '../../../../lib/ratelimit';
 
-const expectedUsername = process.env.ADMIN_USERNAME || 'admin';
+const expectedUsername = process.env.ADMIN_USERNAME;
 const expectedPassword = process.env.ADMIN_PASSWORD;
 
-if (!expectedPassword || expectedPassword.length < 12) {
-  console.warn(
-    '[SECURITY] ADMIN_PASSWORD is missing or too short (min 12 chars). Set a strong password in .env.local'
+const adminConfigured = expectedUsername && expectedPassword && expectedPassword.length >= 12;
+
+if (!adminConfigured) {
+  console.error(
+    '[SECURITY] Admin authentication disabled. Set ADMIN_USERNAME and ADMIN_PASSWORD (min 12 chars) in .env.local'
   );
 }
 
@@ -55,6 +57,13 @@ function clearFailedAttempts(ip) {
 }
 
 export async function POST(request) {
+  if (!adminConfigured) {
+    return NextResponse.json(
+      { message: 'Admin authentication is not configured. Contact the server administrator.' },
+      { status: 500 }
+    );
+  }
+
   const payload = await request.json();
   const username = String(payload.username || '').trim();
   const password = String(payload.password || '');
