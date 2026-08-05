@@ -15,20 +15,35 @@ function ensureAnomalyTable() {
       reporter_email TEXT NOT NULL,
       report_type TEXT NOT NULL DEFAULT 'order_discrepancy',
       description TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'pending',
+      status TEXT NOT NULL DEFAULT 'submitted',
       admin_notes TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      resolved_at TEXT
+      resolved_at TEXT,
+      updated_at TEXT
     );
   `);
+
+  const columns = db.prepare('PRAGMA table_info(anomaly_reports)').all();
+  const existingColumns = new Set(columns.map((col) => col.name));
+  if (!existingColumns.has('updated_at')) {
+    try {
+      db.exec('ALTER TABLE anomaly_reports ADD COLUMN updated_at TEXT');
+    } catch (e) {
+      if (!/duplicate column/i.test(String(e?.message || ''))) {
+        throw e;
+      }
+    }
+  }
 }
 
 ensureAnomalyTable();
 
-const insertReport = db.prepare('INSERT INTO anomaly_reports (order_id, reporter_email, report_type, description) VALUES (@orderId, @reporterEmail, @reportType, @description)');
+const insertReport = db.prepare('INSERT INTO anomaly_reports (order_id, reporter_email, report_type, description, status) VALUES (@orderId, @reporterEmail, @reportType, @description, @status)');
 const getReportsByOrder = db.prepare('SELECT * FROM anomaly_reports WHERE order_id = @orderId ORDER BY created_at DESC');
+const getReportsByOrderAndEmail = db.prepare('SELECT * FROM anomaly_reports WHERE order_id = @orderId AND reporter_email = @email ORDER BY created_at DESC');
 const getAllReports = db.prepare('SELECT * FROM anomaly_reports ORDER BY created_at DESC');
-const updateReportStatus = db.prepare('UPDATE anomaly_reports SET status = @status, admin_notes = @adminNotes, resolved_at = @resolvedAt WHERE id = @id');
+const getReportsByReporter = db.prepare('SELECT * FROM anomaly_reports WHERE reporter_email = @email ORDER BY created_at DESC');
+const updateReportStatus = db.prepare('UPDATE anomaly_reports SET status = @status, admin_notes = @adminNotes, updated_at = @updatedAt, resolved_at = @resolvedAt WHERE id = @id');
 const getReportById = db.prepare('SELECT * FROM anomaly_reports WHERE id = @id');
 
 export async function GET(request) {
@@ -36,17 +51,19 @@ export async function GET(request) {
   const orderId = url.searchParams.get('orderId');
 
   if (orderId) {
-    if (!(await isAdminRequest())) {
-      const user = await getCurrentUser();
-      if (!user) {
-        return NextResponse.json({ message: 'Not authenticated.' }, { status: 401 });
-      }
-      const check = await verifyOrderOwnership(orderId, user);
-      if (!check.ok) {
-        return check.response;
-      }
+    if (await isAdminRequest()) {
+      const reports = getReportsByOrder.all({ orderId });
+      return NextResponse.json({ reports });
     }
-    const reports = getReportsByOrder.all({ orderId });
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ message: 'Not authenticated.' }, { status: 401 });
+    }
+    const check = await verifyOrderOwnership(orderId, user);
+    if (!check.ok) {
+      return check.response;
+    }
+    const reports = getReportsByOrderAndEmail.all({ orderId, email: user.email });
     return NextResponse.json({ reports });
   }
 
@@ -55,7 +72,13 @@ export async function GET(request) {
     return NextResponse.json({ reports });
   }
 
-  return NextResponse.json({ reports: [] });
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ message: 'Not authenticated.' }, { status: 401 });
+  }
+
+  const reports = getReportsByReporter.all({ email: user.email });
+  return NextResponse.json({ reports });
 }
 
 export async function POST(request) {
@@ -73,18 +96,18 @@ export async function POST(request) {
     return NextResponse.json({ message: 'Order ID and description are required.' }, { status: 400 });
   }
 
-  const order = db.prepare('SELECT id, email, created_at, status FROM orders WHERE id = @id').get({ id: orderId });
+  const order = db.prepare('SELECT id, email, status, delivered_at, created_at FROM orders WHERE id = @id').get({ id: orderId });
   if (!order) {
     return NextResponse.json({ message: 'Order not found.' }, { status: 404 });
   }
 
-  if (order.email.toLowerCase() !== user.email.toLowerCase()) {
-    return NextResponse.json({ message: 'Order not found.' }, { status: 404 });
+  const check = await verifyOrderOwnership(orderId, user);
+  if (!check.ok) {
+    return check.response;
   }
 
-  const orderCreated = new Date(order.created_at);
-  const now = new Date();
-  const hoursSinceDelivery = (now - orderCreated) / (1000 * 60 * 60);
+  const deliveryTime = order.delivered_at || order.created_at;
+  const hoursSinceDelivery = (new Date() - new Date(deliveryTime)) / (1000 * 60 * 60);
 
   if (hoursSinceDelivery > 24) {
     return NextResponse.json({
@@ -93,7 +116,7 @@ export async function POST(request) {
     }, { status: 400 });
   }
 
-  insertReport.run({ orderId, reporterEmail: user.email, reportType, description });
+  insertReport.run({ orderId, reporterEmail: user.email, reportType, description, status: 'submitted' });
 
   return NextResponse.json({ message: 'Anomaly report submitted. Your 30-Day Anti-Ban Warranty remains active.' }, { status: 201 });
 }
@@ -106,11 +129,15 @@ export async function PATCH(request) {
   const body = await request.json();
   const { id, status, adminNotes } = body;
 
-  if (!id || !['resolved', 'dismissed', 'escalated'].includes(status)) {
+  const allowedStatuses = ['under_review', 'approved', 'rejected', 'resolved'];
+  if (!id || !allowedStatuses.includes(status)) {
     return NextResponse.json({ message: 'Valid report ID and status are required.' }, { status: 400 });
   }
 
-  updateReportStatus.run({ id, status, adminNotes: adminNotes || '', resolvedAt: new Date().toISOString() });
+  const now = new Date().toISOString();
+  const resolvedAt = status === 'resolved' ? now : null;
+
+  updateReportStatus.run({ id, status, adminNotes: adminNotes || '', updatedAt: now, resolvedAt });
 
   return NextResponse.json({ message: 'Report updated.' });
 }
