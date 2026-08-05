@@ -1,7 +1,8 @@
-import { NextResponse } from 'next/server';
+﻿import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { isAdminRequest } from '@/lib/admin';
 import { getDb } from '@/lib/db';
+import { verifyOrderOwnership } from '@/lib/auth-guard';
 
 const db = getDb();
 
@@ -49,14 +50,14 @@ export async function GET(request) {
   const url = new URL(request.url);
   const orderId = url.searchParams.get('orderId');
 
-  if (!(await isAdminRequest())) {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ message: 'Not authenticated.' }, { status: 401 });
-    }
-  }
-
   if (orderId) {
+    if (!(await isAdminRequest())) {
+      const user = await getCurrentUser();
+      const check = await verifyOrderOwnership(orderId, user);
+      if (!check.ok) {
+        return check.response;
+      }
+    }
     const thread = getThreadByOrder.get({ orderId });
     if (!thread) {
       return NextResponse.json({ thread: null, messages: [] });
@@ -85,6 +86,11 @@ export async function POST(request) {
 
   if (!orderId || !message) {
     return NextResponse.json({ message: 'Order ID and message are required.' }, { status: 400 });
+  }
+
+  const ownership = await verifyOrderOwnership(orderId, user);
+  if (!ownership.ok) {
+    return ownership.response;
   }
 
   let thread = getThreadByOrder.get({ orderId });

@@ -1,8 +1,9 @@
-import { NextResponse } from 'next/server';
+﻿import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { isAdminRequest } from '@/lib/admin';
 import { getDb } from '@/lib/db';
 import { sanitizeString, truncate } from '@/lib/validate';
+import { verifyOrderOwnership } from '@/lib/auth-guard';
 
 const db = getDb();
 
@@ -35,6 +36,16 @@ export async function GET(request) {
   const orderId = url.searchParams.get('orderId');
 
   if (orderId) {
+    if (!(await isAdminRequest())) {
+      const user = await getCurrentUser();
+      if (!user) {
+        return NextResponse.json({ message: 'Not authenticated.' }, { status: 401 });
+      }
+      const check = await verifyOrderOwnership(orderId, user);
+      if (!check.ok) {
+        return check.response;
+      }
+    }
     const reports = getReportsByOrder.all({ orderId });
     return NextResponse.json({ reports });
   }
@@ -62,8 +73,12 @@ export async function POST(request) {
     return NextResponse.json({ message: 'Order ID and description are required.' }, { status: 400 });
   }
 
-  const order = db.prepare('SELECT id, created_at, status FROM orders WHERE id = @id').get({ id: orderId });
+  const order = db.prepare('SELECT id, email, created_at, status FROM orders WHERE id = @id').get({ id: orderId });
   if (!order) {
+    return NextResponse.json({ message: 'Order not found.' }, { status: 404 });
+  }
+
+  if (order.email.toLowerCase() !== user.email.toLowerCase()) {
     return NextResponse.json({ message: 'Order not found.' }, { status: 404 });
   }
 

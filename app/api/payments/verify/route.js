@@ -1,7 +1,8 @@
-import crypto from 'crypto';
+﻿import crypto from 'crypto';
 import { NextResponse } from 'next/server';
 import { getOrderById, markOrderPaid } from '../../../../lib/store';
 import { sanitizeString } from '../../../../lib/validate';
+import { getCurrentUser } from '@/lib/auth';
 
 const MAX_JSON_SIZE = 1024 * 1024;
 
@@ -34,6 +35,11 @@ export async function POST(request) {
 
   const order = await getOrderById(orderId);
   if (!order) {
+    return NextResponse.json({ message: 'Order not found.' }, { status: 404 });
+  }
+
+  const user = await getCurrentUser();
+  if (!user || order.email.toLowerCase() !== user.email.toLowerCase()) {
     return NextResponse.json({ message: 'Order not found.' }, { status: 404 });
   }
 

@@ -1,7 +1,9 @@
-import { NextResponse } from 'next/server';
+﻿import { NextResponse } from 'next/server';
 import Razorpay from 'razorpay';
 import { getOrderById, attachRazorpayOrder } from '../../../../lib/store';
 import { sanitizeString, validateOrderId } from '../../../../lib/validate';
+import { getCurrentUser } from '@/lib/auth';
+import { verifyOrderOwnership } from '@/lib/auth-guard';
 
 const MAX_JSON_SIZE = 1024 * 1024;
 
@@ -33,6 +35,11 @@ export async function POST(request) {
 
   const order = await getOrderById(orderId);
   if (!order) {
+    return NextResponse.json({ message: 'Order not found.' }, { status: 404 });
+  }
+
+  const user = await getCurrentUser();
+  if (!user || order.email.toLowerCase() !== user.email.toLowerCase()) {
     return NextResponse.json({ message: 'Order not found.' }, { status: 404 });
   }
 
