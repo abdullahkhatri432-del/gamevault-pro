@@ -209,7 +209,7 @@ export default function HomePage() {
     const gameName = GAMES_CONFIG.find(g => g.id === gameId)?.name || 'Custom Order';
     const gameServices = SERVICE_TYPES[gameId] || SERVICE_TYPES.other;
     const selectedService = productServices[account.id] || gameServices[0]?.id || 'account_recovery';
-    const params = new URLSearchParams({ game: gameId, service: selectedService, name: gameName });
+    const params = new URLSearchParams({ game: gameId, service: selectedService, name: gameName, productId: account.id });
     if (activePlatform !== 'all') params.set('platform', activePlatform);
     if (activePlatform === 'PC' && activeLauncher !== 'all') params.set('launcher', activeLauncher);
     if (buyer) {
@@ -456,12 +456,13 @@ export default function HomePage() {
                     </div>
                   )}
                   {account.imageUrl ? (
-                    <img className="product-image" src={account.imageUrl} alt={account.title} />
+                    <img className="product-image" src={account.imageUrl} alt={account.title} loading="lazy" />
                   ) : null}
                   <div className="product-badge">{account.tag}</div>
                   <h3>{account.title}</h3>
                   {account.category ? <p className="product-category">{account.category}</p> : null}
                   {account.description ? <p className="product-description">{account.description}</p> : null}
+
                   <div className="product-service-select">
                     <select
                       value={productServices[account.id] || (SERVICE_TYPES[account.gameId] || SERVICE_TYPES.other)[0]?.id}
@@ -472,16 +473,69 @@ export default function HomePage() {
                       ))}
                     </select>
                   </div>
+
+                  <div className="product-details-grid">
+                    {account.platform ? (
+                      <div className="product-detail">
+                        <span className="product-detail-label">Platform</span>
+                        <span className="product-detail-value">{account.platform}</span>
+                      </div>
+                    ) : null}
+                    {account.launcher ? (
+                      <div className="product-detail">
+                        <span className="product-detail-label">Launcher</span>
+                        <span className="product-detail-value">{account.launcher}</span>
+                      </div>
+                    ) : null}
+                    {account.deliveryTime ? (
+                      <div className="product-detail">
+                        <span className="product-detail-label">Delivery</span>
+                        <span className="product-detail-value product-detail-accent">{account.deliveryTime}</span>
+                      </div>
+                    ) : null}
+                    {account.warrantyDays ? (
+                      <div className="product-detail">
+                        <span className="product-detail-label">Warranty</span>
+                        <span className="product-detail-value">{account.warrantyDays} days</span>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {account.requirements ? (
+                    <p className="product-requirements">
+                      <span className="product-req-icon">📋</span> {account.requirements}
+                    </p>
+                  ) : null}
+
+                  {account.importantNotes ? (
+                    <p className="product-notes">
+                      <span className="product-notes-icon">⚠️</span> {account.importantNotes}
+                    </p>
+                  ) : null}
+
                   <div className="product-meta">
                     <span>{account.rating} ★</span>
                     <span>{account.stock}</span>
+                    {account.supportedRegions ? <span className="product-region">{account.supportedRegions}</span> : null}
                   </div>
-                  <div className="product-guarantees">
-                    <span>{deliveryEta}</span>
-                    <span>✓ Guaranteed</span>
-                  </div>
+
+                  {account.fulfillmentMethod ? (
+                    <div className="product-fulfillment">
+                      <span className={`fulfillment-badge fulfillment-${account.fulfillmentMethod}`}>
+                        {account.fulfillmentMethod === 'account_login' ? '🔐 Account Login' :
+                         account.fulfillmentMethod === 'session_invite' ? '🎮 Session Invite' :
+                         account.fulfillmentMethod === 'instant_delivery' ? '⚡ Instant Delivery' :
+                         account.fulfillmentMethod === 'account_transfer' ? '🔄 Account Transfer' :
+                         '📦 ' + account.fulfillmentMethod}
+                      </span>
+                    </div>
+                  ) : null}
+
                   <div className="price-row">
-                    <strong>{account.price}</strong>
+                    <div className="price-group">
+                      {account.originalPrice ? <span className="product-original-price">{account.originalPrice}</span> : null}
+                      <strong>{account.price}</strong>
+                    </div>
                     <button className="primary-btn small" type="button" onClick={() => selectAccount(account)}>Buy now</button>
                   </div>
                 </article>

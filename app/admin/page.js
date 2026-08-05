@@ -22,6 +22,16 @@ const createEmptyProduct = () => ({
   gameId: 'gta5',
   imageUrl: '',
   description: '',
+  platform: 'PC',
+  launcher: 'Steam',
+  requirements: '',
+  deliveryTime: '2-4 hrs',
+  warrantyDays: 30,
+  originalPrice: '',
+  serviceStatus: 'active',
+  fulfillmentMethod: 'account_login',
+  importantNotes: '',
+  supportedRegions: '',
 });
 
 const formatPaise = (paise) => `₹${(Number(paise || 0) / 100).toLocaleString('en-IN')}`;
@@ -338,12 +348,16 @@ export default function AdminPage() {
               </select>
             </label>
             <label>
-              Game title
+              Service name
               <input value={productForm.title} onChange={(event) => setProductForm({ ...productForm, title: event.target.value })} placeholder="GTA 5 Money 30M" />
             </label>
             <label>
               Price (INR)
               <input value={productForm.price} onChange={(event) => setProductForm({ ...productForm, price: event.target.value })} placeholder="₹2,499" />
+            </label>
+            <label>
+              Original price (for discount display, optional)
+              <input value={productForm.originalPrice} onChange={(event) => setProductForm({ ...productForm, originalPrice: event.target.value })} placeholder="₹3,499" />
             </label>
             <label>
               Tag
@@ -354,22 +368,67 @@ export default function AdminPage() {
               <input value={productForm.category} onChange={(event) => setProductForm({ ...productForm, category: event.target.value })} placeholder="In-game currency / Level boost / Upgrade" />
             </label>
             <label>
+              Platform
+              <input value={productForm.platform} onChange={(event) => setProductForm({ ...productForm, platform: event.target.value })} placeholder="PC, PS5, Xbox" />
+            </label>
+            <label>
+              Launcher
+              <input value={productForm.launcher} onChange={(event) => setProductForm({ ...productForm, launcher: event.target.value })} placeholder="Steam, Epic Games, Rockstar Launcher" />
+            </label>
+            <label>
+              Description
+              <textarea value={productForm.description} onChange={(event) => setProductForm({ ...productForm, description: event.target.value })} placeholder="Short description for the product." />
+            </label>
+            <label>
+              Requirements (what customer needs to provide)
+              <textarea value={productForm.requirements} onChange={(event) => setProductForm({ ...productForm, requirements: event.target.value })} placeholder="e.g., Your Rockstar Social Club login or gamertag" />
+            </label>
+            <label>
+              Delivery time
+              <input value={productForm.deliveryTime} onChange={(event) => setProductForm({ ...productForm, deliveryTime: event.target.value })} placeholder="30-60 min / 2-4 hrs / Same session" />
+            </label>
+            <label>
+              Warranty (days)
+              <input type="number" min="0" value={productForm.warrantyDays} onChange={(event) => setProductForm({ ...productForm, warrantyDays: parseInt(event.target.value) || 0 })} />
+            </label>
+            <label>
+              Fulfillment method
+              <select value={productForm.fulfillmentMethod} onChange={(event) => setProductForm({ ...productForm, fulfillmentMethod: event.target.value })}>
+                <option value="account_login">Account Login</option>
+                <option value="session_invite">Session Invite</option>
+                <option value="instant_delivery">Instant Delivery</option>
+                <option value="account_transfer">Account Transfer</option>
+              </select>
+            </label>
+            <label>
+              Service status
+              <select value={productForm.serviceStatus} onChange={(event) => setProductForm({ ...productForm, serviceStatus: event.target.value })}>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="maintenance">Maintenance</option>
+              </select>
+            </label>
+            <label>
               Rating
               <input value={productForm.rating} onChange={(event) => setProductForm({ ...productForm, rating: event.target.value })} placeholder="4.8" />
             </label>
             <label>
-              Stock
-              <input value={productForm.stock} onChange={(event) => setProductForm({ ...productForm, stock: event.target.value })} placeholder="In stock" />
+              Stock / Availability
+              <input value={productForm.stock} onChange={(event) => setProductForm({ ...productForm, stock: event.target.value })} placeholder="In stock / Limited stock / Out of stock" />
             </label>
             <label>
               Image URL
               <input value={productForm.imageUrl} onChange={(event) => setProductForm({ ...productForm, imageUrl: event.target.value })} placeholder="https://example.com/image.jpg" />
             </label>
             <label>
-              Description
-              <textarea value={productForm.description} onChange={(event) => setProductForm({ ...productForm, description: event.target.value })} placeholder="Short description for the product." />
+              Important notes
+              <textarea value={productForm.importantNotes} onChange={(event) => setProductForm({ ...productForm, importantNotes: event.target.value })} placeholder="Important info shown to customers (e.g., do not log in during delivery)" />
             </label>
-            <button className="primary-btn" type="submit">Add product</button>
+            <label>
+              Supported regions
+              <input value={productForm.supportedRegions} onChange={(event) => setProductForm({ ...productForm, supportedRegions: event.target.value })} placeholder="Global / US & EU / Asia only" />
+            </label>
+            <button className="primary-btn" type="submit">Add service</button>
             {productStatus ? <p className="status-text">{productStatus}</p> : null}
           </form>
         </article>
@@ -530,12 +589,16 @@ export default function AdminPage() {
                     </select>
                   </label>
                   <label>
-                    Title
+                    Service name
                     <input value={product.title} onChange={(event) => setProductDrafts(productDrafts.map((entry) => entry.id === product.id ? { ...entry, title: event.target.value } : entry))} />
                   </label>
                   <label>
                     Price
                     <input value={product.price} onChange={(event) => setProductDrafts(productDrafts.map((entry) => entry.id === product.id ? { ...entry, price: event.target.value } : entry))} />
+                  </label>
+                  <label>
+                    Original price
+                    <input value={product.originalPrice || ''} onChange={(event) => setProductDrafts(productDrafts.map((entry) => entry.id === product.id ? { ...entry, originalPrice: event.target.value } : entry))} placeholder="For discount display" />
                   </label>
                   <label>
                     Tag
@@ -546,11 +609,48 @@ export default function AdminPage() {
                     <input value={product.category || 'Game'} onChange={(event) => setProductDrafts(productDrafts.map((entry) => entry.id === product.id ? { ...entry, category: event.target.value } : entry))} />
                   </label>
                   <label>
+                    Platform
+                    <input value={product.platform || 'PC'} onChange={(event) => setProductDrafts(productDrafts.map((entry) => entry.id === product.id ? { ...entry, platform: event.target.value } : entry))} />
+                  </label>
+                  <label>
+                    Launcher
+                    <input value={product.launcher || 'Steam'} onChange={(event) => setProductDrafts(productDrafts.map((entry) => entry.id === product.id ? { ...entry, launcher: event.target.value } : entry))} />
+                  </label>
+                  <label>
+                    Requirements
+                    <input value={product.requirements || ''} onChange={(event) => setProductDrafts(productDrafts.map((entry) => entry.id === product.id ? { ...entry, requirements: event.target.value } : entry))} />
+                  </label>
+                  <label>
+                    Delivery time
+                    <input value={product.deliveryTime || ''} onChange={(event) => setProductDrafts(productDrafts.map((entry) => entry.id === product.id ? { ...entry, deliveryTime: event.target.value } : entry))} />
+                  </label>
+                  <label>
+                    Warranty (days)
+                    <input type="number" min="0" value={product.warrantyDays || 30} onChange={(event) => setProductDrafts(productDrafts.map((entry) => entry.id === product.id ? { ...entry, warrantyDays: parseInt(event.target.value) || 0 } : entry))} />
+                  </label>
+                  <label>
+                    Fulfillment method
+                    <select value={product.fulfillmentMethod || 'account_login'} onChange={(event) => setProductDrafts(productDrafts.map((entry) => entry.id === product.id ? { ...entry, fulfillmentMethod: event.target.value } : entry))}>
+                      <option value="account_login">Account Login</option>
+                      <option value="session_invite">Session Invite</option>
+                      <option value="instant_delivery">Instant Delivery</option>
+                      <option value="account_transfer">Account Transfer</option>
+                    </select>
+                  </label>
+                  <label>
+                    Service status
+                    <select value={product.serviceStatus || 'active'} onChange={(event) => setProductDrafts(productDrafts.map((entry) => entry.id === product.id ? { ...entry, serviceStatus: event.target.value } : entry))}>
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                      <option value="maintenance">Maintenance</option>
+                    </select>
+                  </label>
+                  <label>
                     Rating
                     <input value={product.rating} onChange={(event) => setProductDrafts(productDrafts.map((entry) => entry.id === product.id ? { ...entry, rating: event.target.value } : entry))} />
                   </label>
                   <label>
-                    Stock
+                    Stock / Availability
                     <input value={product.stock} onChange={(event) => setProductDrafts(productDrafts.map((entry) => entry.id === product.id ? { ...entry, stock: event.target.value } : entry))} />
                   </label>
                   <label>
@@ -560,6 +660,14 @@ export default function AdminPage() {
                   <label>
                     Description
                     <textarea value={product.description || ''} onChange={(event) => setProductDrafts(productDrafts.map((entry) => entry.id === product.id ? { ...entry, description: event.target.value } : entry))} />
+                  </label>
+                  <label>
+                    Important notes
+                    <textarea value={product.importantNotes || ''} onChange={(event) => setProductDrafts(productDrafts.map((entry) => entry.id === product.id ? { ...entry, importantNotes: event.target.value } : entry))} />
+                  </label>
+                  <label>
+                    Supported regions
+                    <input value={product.supportedRegions || ''} onChange={(event) => setProductDrafts(productDrafts.map((entry) => entry.id === product.id ? { ...entry, supportedRegions: event.target.value } : entry))} />
                   </label>
                   <div className="inventory-actions">
                     <button className="secondary-btn" type="button" onClick={() => handleUpdateProduct(product)}>Save</button>

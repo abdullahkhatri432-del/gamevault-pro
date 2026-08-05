@@ -4,7 +4,13 @@ import { createAdminToken } from '../../../../lib/admin';
 import { clientIp, rateLimit } from '../../../../lib/ratelimit';
 
 const expectedUsername = process.env.ADMIN_USERNAME || 'admin';
-const expectedPassword = process.env.ADMIN_PASSWORD || 'admin123';
+const expectedPassword = process.env.ADMIN_PASSWORD;
+
+if (!expectedPassword || expectedPassword.length < 12) {
+  console.warn(
+    '[SECURITY] ADMIN_PASSWORD is missing or too short (min 12 chars). Set a strong password in .env.local'
+  );
+}
 
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000;

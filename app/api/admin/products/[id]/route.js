@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { isAdminRequest } from '../../../../../lib/admin';
 import { deleteProduct, updateProduct } from '../../../../../lib/store';
-import { sanitizeString, truncate } from '../../../../../lib/validate';
+import { sanitizeString, truncate, validatePrice } from '../../../../../lib/validate';
+import { logApiError } from '../../../../../lib/logger';
 
 const MAX_JSON_SIZE = 1024 * 1024;
 
@@ -34,7 +35,7 @@ export async function PATCH(request, { params }) {
     const updatedProduct = await updateProduct(productId, {
       ...payload,
       title: truncate(sanitizeString(payload.title), 200),
-      price: truncate(sanitizeString(payload.price), 50),
+      price: validatePrice(payload.price),
       tag: truncate(sanitizeString(payload.tag), 100),
       rating: truncate(sanitizeString(payload.rating), 10),
       stock: truncate(sanitizeString(payload.stock), 50),
@@ -42,9 +43,20 @@ export async function PATCH(request, { params }) {
       gameId: truncate(sanitizeString(payload.gameId || payload.game_id || 'gta5'), 20),
       imageUrl: truncate(sanitizeString(payload.imageUrl), 2048),
       description: truncate(sanitizeString(payload.description), 2000),
+      platform: truncate(sanitizeString(payload.platform), 200),
+      launcher: truncate(sanitizeString(payload.launcher), 200),
+      requirements: truncate(sanitizeString(payload.requirements), 2000),
+      deliveryTime: truncate(sanitizeString(payload.deliveryTime || payload.delivery_time), 100),
+      warrantyDays: Number.parseInt(payload.warrantyDays ?? payload.warranty_days ?? 30, 10) || 30,
+      originalPrice: truncate(sanitizeString(payload.originalPrice || payload.original_price), 50),
+      serviceStatus: truncate(sanitizeString(payload.serviceStatus || payload.service_status), 50),
+      fulfillmentMethod: truncate(sanitizeString(payload.fulfillmentMethod || payload.fulfillment_method), 100),
+      importantNotes: truncate(sanitizeString(payload.importantNotes || payload.important_notes), 2000),
+      supportedRegions: truncate(sanitizeString(payload.supportedRegions || payload.supported_regions), 200),
     });
     return NextResponse.json(updatedProduct);
   } catch (error) {
+    logApiError('PATCH /api/admin/products/[id]', error, { productId });
     return NextResponse.json({ message: 'Unable to update the product.' }, { status: 400 });
   }
 }

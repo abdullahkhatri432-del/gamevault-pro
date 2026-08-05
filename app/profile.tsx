@@ -1,6 +1,7 @@
+// @ts-nocheck
 import { useEffect, useState } from 'react';
 
-const formatPaise = (paise) => `₹${(Number(paise || 0) / 100).toLocaleString('en-IN')}`;
+const formatPaise = (paise: number | string | null | undefined) => `₹${(Number(paise || 0) / 100).toLocaleString('en-IN')}`;
 
 function escapeHTML(str) {
   if (typeof str !== 'string') {

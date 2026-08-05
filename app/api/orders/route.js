@@ -4,6 +4,7 @@ import { isAdminRequest } from '../../../lib/admin';
 import { clientIp, rateLimit } from '../../../lib/ratelimit';
 import { createOrderWith2FA, getOrdersForFulfillment, updateOrderFulfillmentStatus, generateAndStoreOTP, verifyOTP, purgeSensitiveData, decryptCredentials, sendDiscordWebhook, listOrders, listOrdersByUser, updateDeliveryProof } from '../../../lib/store';
 import { validateOrderId, sanitizeString, truncate } from '../../../lib/validate';
+import { logApiError } from '../../../lib/logger';
 
 const MAX_JSON_SIZE = 1024 * 1024;
 
@@ -83,6 +84,7 @@ export async function POST(request) {
 
     return NextResponse.json(order, { status: 201 });
   } catch (error) {
+    logApiError('POST /api/orders', error);
     return NextResponse.json({ message: error.message || 'Unable to place the order.' }, { status: 400 });
   }
 }
@@ -143,6 +145,7 @@ export async function PATCH(request) {
 
     return NextResponse.json({ message: 'Invalid action.' }, { status: 400 });
   } catch (error) {
+    logApiError('PATCH /api/orders', error, { orderId });
     return NextResponse.json({ message: error.message || 'Operation failed.' }, { status: 400 });
   }
 }

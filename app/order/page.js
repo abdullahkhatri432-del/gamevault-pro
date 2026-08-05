@@ -91,6 +91,7 @@ export default function OrderPage() {
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [razorpayReady, setRazorpayReady] = useState(false);
   const [reviews, setReviews] = useState([]);
+  const [selectedProduct, setSelectedProduct] = useState(null);
 
   const currentServiceTypes = SERVICE_TYPES[form.gameId] || SERVICE_TYPES.gta5;
   const currentLaunchers = LAUNCHERS_BY_GAME[form.gameId] || ['Steam'];
@@ -149,6 +150,17 @@ export default function OrderPage() {
 
     refreshBuyerSession();
     fetchStoreData();
+
+    const productId = params.get('productId');
+    if (productId) {
+      fetch(`/api/store`)
+        .then(r => r.json())
+        .then(store => {
+          const product = store.featuredAccounts.find(p => String(p.id) === String(productId));
+          if (product) setSelectedProduct(product);
+        })
+        .catch(() => {});
+    }
 
     const saved = getCookie('checkout_data');
     if (saved) {
@@ -380,6 +392,66 @@ export default function OrderPage() {
               <span className="order-game-hint">Service type</span>
             </div>
           </div>
+
+          {selectedProduct && (
+            <div className="order-service-details">
+              <h3 className="order-service-details-title">Service Details</h3>
+              <div className="order-details-grid">
+                {selectedProduct.platform && (
+                  <div className="order-detail-item">
+                    <span className="order-detail-label">Platform</span>
+                    <span className="order-detail-value">{selectedProduct.platform}</span>
+                  </div>
+                )}
+                {selectedProduct.launcher && (
+                  <div className="order-detail-item">
+                    <span className="order-detail-label">Launcher</span>
+                    <span className="order-detail-value">{selectedProduct.launcher}</span>
+                  </div>
+                )}
+                {selectedProduct.deliveryTime && (
+                  <div className="order-detail-item">
+                    <span className="order-detail-label">Delivery Time</span>
+                    <span className="order-detail-value order-detail-accent">{selectedProduct.deliveryTime}</span>
+                  </div>
+                )}
+                {selectedProduct.warrantyDays > 0 && (
+                  <div className="order-detail-item">
+                    <span className="order-detail-label">Warranty</span>
+                    <span className="order-detail-value">{selectedProduct.warrantyDays}-day anti-ban</span>
+                  </div>
+                )}
+                {selectedProduct.fulfillmentMethod && (
+                  <div className="order-detail-item">
+                    <span className="order-detail-label">Fulfillment</span>
+                    <span className="order-detail-value">
+                      {selectedProduct.fulfillmentMethod === 'account_login' ? 'Account Login' :
+                       selectedProduct.fulfillmentMethod === 'session_invite' ? 'Session Invite' :
+                       selectedProduct.fulfillmentMethod === 'instant_delivery' ? 'Instant Delivery' :
+                       selectedProduct.fulfillmentMethod === 'account_transfer' ? 'Account Transfer' :
+                       selectedProduct.fulfillmentMethod}
+                    </span>
+                  </div>
+                )}
+                {selectedProduct.supportedRegions && (
+                  <div className="order-detail-item">
+                    <span className="order-detail-label">Regions</span>
+                    <span className="order-detail-value">{selectedProduct.supportedRegions}</span>
+                  </div>
+                )}
+              </div>
+              {selectedProduct.requirements && (
+                <div className="order-detail-notice order-detail-req">
+                  <span>📋</span> {selectedProduct.requirements}
+                </div>
+              )}
+              {selectedProduct.importantNotes && (
+                <div className="order-detail-notice order-detail-warn">
+                  <span>⚠️</span> {selectedProduct.importantNotes}
+                </div>
+              )}
+            </div>
+          )}
 
           <fieldset className="launcher-fieldset">
             <legend>Platform Selection</legend>
