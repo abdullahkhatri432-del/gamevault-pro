@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import Razorpay from 'razorpay';
 import { NextResponse } from 'next/server';
 import { getOrderById, markOrderPaid } from '../../../../lib/store';
 import { sanitizeString } from '../../../../lib/validate';
@@ -25,7 +26,7 @@ export async function POST(request) {
   const razorpaySignature = sanitizeString(payload.razorpay_signature, 128);
   const orderId = sanitizeString(payload.orderId, 64);
 
-  if (!process.env.RAZORPAY_KEY_SECRET) {
+  if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
     return NextResponse.json({ message: 'Payment verification is not configured.' }, { status: 400 });
   }
 
@@ -70,6 +71,33 @@ export async function POST(request) {
 
   if (!isValid) {
     return NextResponse.json({ message: 'Signature mismatch.' }, { status: 400 });
+  }
+
+  try {
+    const razorpay = new Razorpay({
+      key_id: process.env.RAZORPAY_KEY_ID,
+      key_secret: process.env.RAZORPAY_KEY_SECRET,
+    });
+
+    const payment = await razorpay.payments.fetch(razorpayPaymentId);
+
+    if (payment.status !== 'captured') {
+      return NextResponse.json({ message: 'Payment has not been captured yet.' }, { status: 400 });
+    }
+
+    if (payment.currency !== 'INR') {
+      return NextResponse.json({ message: 'Invalid payment currency.' }, { status: 400 });
+    }
+
+    if (payment.amount !== order.amountPaise) {
+      return NextResponse.json({ message: 'Payment amount does not match order total.' }, { status: 400 });
+    }
+
+    if (payment.order_id !== razorpayOrderId) {
+      return NextResponse.json({ message: 'Payment does not belong to this Razorpay order.' }, { status: 400 });
+    }
+  } catch {
+    return NextResponse.json({ message: 'Unable to verify payment with Razorpay.' }, { status: 502 });
   }
 
   await markOrderPaid(orderId, razorpayPaymentId);
