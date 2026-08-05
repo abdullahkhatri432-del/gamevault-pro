@@ -1,4 +1,4 @@
-﻿import crypto from 'crypto';
+import crypto from 'crypto';
 import { NextResponse } from 'next/server';
 import { getOrderById, markOrderPaid } from '../../../../lib/store';
 import { sanitizeString } from '../../../../lib/validate';
@@ -43,8 +43,20 @@ export async function POST(request) {
     return NextResponse.json({ message: 'Order not found.' }, { status: 404 });
   }
 
+  if (order.status === 'cancelled') {
+    return NextResponse.json({ message: 'This order has been cancelled.' }, { status: 400 });
+  }
+
   if (order.razorpayOrderId !== razorpayOrderId) {
     return NextResponse.json({ message: 'Payment order does not match.' }, { status: 400 });
+  }
+
+  if ((order.status === 'paid' || order.status === 'delivered') && order.razorpayPaymentId === razorpayPaymentId) {
+    return NextResponse.json({ valid: true, message: 'Payment already verified. Your order is confirmed.' });
+  }
+
+  if ((order.status === 'paid' || order.status === 'delivered') && order.razorpayPaymentId !== razorpayPaymentId) {
+    return NextResponse.json({ message: 'This order has already been paid with a different payment.' }, { status: 400 });
   }
 
   const expectedSignature = crypto

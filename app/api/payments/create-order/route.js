@@ -1,4 +1,4 @@
-﻿import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import Razorpay from 'razorpay';
 import { getOrderById, attachRazorpayOrder } from '../../../../lib/store';
 import { sanitizeString, validateOrderId } from '../../../../lib/validate';
@@ -43,11 +43,19 @@ export async function POST(request) {
     return NextResponse.json({ message: 'Order not found.' }, { status: 404 });
   }
 
+  if (order.status === 'cancelled') {
+    return NextResponse.json({ message: 'This order has been cancelled.' }, { status: 400 });
+  }
+
   if (order.status === 'paid' || order.status === 'delivered') {
     return NextResponse.json({ message: 'This order has already been paid.' }, { status: 400 });
   }
 
-  if (order.amountPaise <= 0) {
+  if (order.razorpayOrderId) {
+    return NextResponse.json({ message: 'A payment is already in progress for this order.' }, { status: 400 });
+  }
+
+  if (!order.amountPaise || order.amountPaise <= 0) {
     return NextResponse.json({ message: 'This order has an invalid amount.' }, { status: 400 });
   }
 
